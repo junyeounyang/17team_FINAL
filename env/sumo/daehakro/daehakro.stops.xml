@@ -1,0 +1,14 @@
+<additional>
+    <busStop id="bs_bay" lane="nb_BAY0_BAY1_1" startPos="1.0" endPos="39.0" friendlyPos="true" name="bs_bay"/>
+    <busStop id="bs_nb3" lane="nb_H_d596_1" startPos="15.5" endPos="45.0" friendlyPos="true" name="bs_nb3"/>
+    <busStop id="bs_nb4" lane="nb_D_d816_1" startPos="13.6" endPos="43.1" friendlyPos="true" name="bs_nb4"/>
+    <busStop id="bs_nb5" lane="nb_B_UBAY_1" startPos="42.4" endPos="81.9" friendlyPos="true" name="bs_nb5"/>
+    <busStop id="bs_sb1" lane="sb_A_C_1" startPos="121.4" endPos="151.4" friendlyPos="true" name="bs_sb1"/>
+    <busStop id="bs_sb2" lane="sb_WA_D_1" startPos="1.3" endPos="31.3" friendlyPos="true" name="bs_sb2"/>
+    <busStop id="bs_sb3" lane="sb_WC_H_1" startPos="34.5" endPos="64.5" friendlyPos="true" name="bs_sb3"/>
+    <busStop id="bs_sb4" lane="sb_O_M_1" startPos="31.8" endPos="61.8" friendlyPos="true" name="bs_sb4"/>
+    <busStop id="bs_sb5" lane="sb_M_WD_1" startPos="105.3" endPos="135.3" friendlyPos="true" name="bs_sb5"/>
+    <busStop id="bs_sb7" lane="sb_SB3_IH_1" startPos="20.0" endPos="50.0" friendlyPos="true" name="bs_sb7"/>
+    <busStop id="bs_ring_n" lane="arcN2_0" startPos="0.3" endPos="12.5" friendlyPos="true" name="혜화동로터리 북쪽"/>
+    <busStop id="bs_ring_w" lane="arcW1_0" startPos="8.0" endPos="22.0" friendlyPos="true" name="혜화동로터리 서쪽"/>
+</additional>
