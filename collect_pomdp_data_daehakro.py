@@ -1,7 +1,7 @@
 """대학로 POMDP 데이터 수집 — 수업의 collect_pomdp_data.py 에 대학로 기록 항목 23개를 더한 수정본.
 
 수업 원본(collect_pomdp_data.py)은 그대로 두고 이 파일을 새로 만들었다. 저장 형식은 원본과 같고, 아래만 더했다.
-관측(53차원)·행동·보상·학습·평가 코드는 바꾸지 않는다. 더한 항목은 기록용 state 라서 정책 입력에 들어가지 않는다.
+관측(51차원)·행동·보상·학습·평가 코드는 바꾸지 않는다. 더한 항목은 기록용 state 라서 정책 입력에 들어가지 않는다.
 
 더한 항목 (매 스텝, state 는 그 스텝에 행동을 정할 때의 상태)
     state.sim_time                 float  그 state 를 읽은 시뮬레이션 시각 (s)
@@ -32,12 +32,12 @@ NPZ 에 더한 것 (고정 길이만): sim_time (N,), tls (N, 137) float32 (orde
     python collect_pomdp_data_daehakro.py --episodes 2
     python collect_pomdp_data_daehakro.py --model results/ppo_v2/best.pt --episodes 100 --workers 6
 
-아래는 수업 원본 설명 그대로 (관측 차원만 대학로 기준 53 으로 고침).
+아래는 수업 원본 설명 그대로 (관측 차원만 대학로 기준 51 로 고침).
 
 저장 단위는 POMDP transition 하나다:
     (o_t, a_t, r_t, o_{t+1}, terminated, truncated, s_t, s_{t+1})
 
-- o_t / o_{t+1}: agent가 실제로 보는 부분관측 (53차원)
+- o_t / o_{t+1}: agent가 실제로 보는 부분관측 (51차원)
 - a_t: [가감속 raw, 차선변경 raw]
 - lane_change: 실제 환경에 적용된 {-1, 0, +1}
 - s_t / s_{t+1}: SUMO 내부의 privileged simulator state.
