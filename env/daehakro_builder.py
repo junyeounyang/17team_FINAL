@@ -1471,7 +1471,7 @@ def build_routes(net, plan: Plan, out_path, stops_edges, cor):
     jm = (f'jmStoplineCrossingGap="{cfg.PED_YIELD_GAP}" jmCrossingGap="{cfg.PED_LOOKAHEAD}" '
           f'jmTimegapMinor="{cfg.MINOR_GAP}" jmSigmaMinor="0" jmAdvance="{cfg.JUNCTION_ADVANCE}"')
     for name, v in cfg.CAR_TYPES.items():
-        attrs = [f'id="car_{name}"', f'probability="{v["probability"] / tot:.3f}"',
+        attrs = [f'id="car_{name}"', f'probability="{v["probability"] / tot * (1.0 - cfg.VAN_SHARE):.4f}"',
                  f'carFollowModel="{v["carFollowModel"]}"', f'accel="{v["accel"]}"',
                  f'decel="{v["decel"]}"', f'tau="{v["tau"]}"', f'minGap="{v["minGap"]}"',
                  f'color="{v["color"]}"', f'length="{cc["length"]}"', f'maxSpeed="{cc["maxSpeed"]}"',
@@ -1486,6 +1486,13 @@ def build_routes(net, plan: Plan, out_path, stops_edges, cor):
             if k in v:
                 attrs.append(f'{k}="{v[k]}"')
         lines.append("        <vType " + " ".join(attrs) + "/>")
+    if cfg.VAN_SHARE > 0:                            # 택배 탑차: 차고가 높아 시야를 가린다 (env/occlusion.py)
+        vt = cfg.VAN_TYPE
+        lines.append(f'        <vType id="car_van" probability="{cfg.VAN_SHARE:.4f}" carFollowModel="Krauss" '
+                     + " ".join(f'{k}="{vt[k]}"' for k in ("accel", "decel", "tau", "minGap", "sigma", "color", "length",
+                                                           "width", "height", "maxSpeed", "guiShape"))
+                     + f' speedFactor="{cc["speedFactor"]}" vClass="{cc["vClass"]}" lcStrategic="1.0" lcCooperative="1.0" '
+                       f'lcSpeedGain="0.7" lcSpeedGainRight="0.02" lcKeepRight="0" lcAssertive="1.0" {jm}/>')
     lines.append("    </vTypeDistribution>")
     bt = cfg.BUS_TYPE
     lines.append('    <vType id="bus" ' + " ".join(f'{k}="{v}"' for k, v in bt.items()) + f' {jm}/>')

@@ -250,6 +250,14 @@ CAR_TYPES = {
     "acc":    {"probability": 0.15, "carFollowModel": "ACC", "accel": 2.0, "decel": 4.0,
                "tau": 1.4, "minGap": 2.0, "color": "1,0,1", "gapClosingControlGainSpeed": 0.5},
 }
+# 택배 탑차 (2026-11-25, 버스·소방차 가림 실험): 일반 차량 가운데 이 비율이 차고가 높은 탑차로 나온다.
+#   비율 4% = 화물차 비율 20.8% (국토부 도로 교통량 조사, 일반국도, 2025)
+#             × 화물차 중 차고가 높은 유형 20.3% (차종별 화물차 등록현황의 특수용도형 + 덤프형, 2026.10)
+#   크기는 1톤 내장탑차 (현대 포터2 내장탑차 제원: 길이 5.2 m, 폭 1.8 m, 높이 2.66 m).
+#   달리는 방식은 일반 차(Krauss)와 같고 차로 이용 규칙도 승용차와 같다 (vClass 를 바꾸지 않는다). 0 이면 넣지 않는다.
+VAN_SHARE = 0.04
+VAN_TYPE = {"length": 5.2, "width": 1.8, "height": 2.6, "maxSpeed": 19.4, "accel": 2.0, "decel": 4.5,
+            "tau": 1.2, "minGap": 2.5, "sigma": 0.3, "color": "0.6,0.4,0.2", "guiShape": "delivery"}
 CAR_COMMON = {"length": 4.6, "maxSpeed": 22.0, "speedFactor": "normc(1.0,0.08,0.8,1.15)",
               "vClass": "passenger", "guiShape": "passenger/sedan"}
 BUS_TYPE = {"length": 11.5, "minGap": 3.0, "maxSpeed": 16.7, "accel": 1.2, "decel": 4.0,

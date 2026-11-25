@@ -11,7 +11,17 @@
     제한속도    차로에서 읽는다 (어린이 보호구역 30, 그 밖 50 km/h)
     차로변경    모두 정책이 한다. SUMO 는 AV 의 차로를 스스로 바꾸지 않는다 (아래 5) 와 '차로변경' 설정 참고)
 
-2) 관측 — 51차원, 범위 [-1, 1]
+2) 관측 — 50차원, 범위 [-1, 1]
+    2026-11-25 (밤): 환경이 계산해 주던 세 칸을 뺐다 (53 → 50차원). 수업 조건 "보조 도움 요소 금지" 에 맞춘 것이다.
+             · 앞차가 '정해진 정차' 중인지 (SUMO 내부 상태)
+             · 서야 할 곳 앞에 멈추려면 필요한 감속 (신호·보행자·차로 끝을 환경이 판단해 브레이크 세기로 바꿔 준 값)
+             · 앞차에 닿지 않으려면 필요한 감속
+             재료(속도 [0], 앞차 간격·상대 속도, 신호 [32..34], 횡단보도 [35][36], 차로 연결 [21..25])는 그대로 있다.
+             언제 얼마나 밟을지는 정책이 스스로 배운다.
+    2026-11-25: 버스·소방차·탑차 가림 (env/occlusion.py). 키 큰 차 뒤에 있는 것은 관측에서 빠진다 —
+             신호 색 [33][34], 횡단보도 보행자 [36], 겹치는 차 [37..42], 옆옆 차로의 차와 밀도, 사이렌 차의 차로 [44].
+             가려졌다는 사실은 [48] [49] 가 알려 준다.
+             위반 판정·보상·시범 운전자는 실제 상황을 쓴다. 끄기: 환경변수 DAEHAKRO_OCCLUSION=0 (칸 수는 그대로).
     [0..30]  수업 코드의 31차원 그대로. 단, 세 가지를 대학로에 맞게 고쳤다.
              · 바로 옆 차로의 앞차·뒤차 [5..8] (왼쪽) [13..16] (오른쪽): 나란히 있는 차도 보인다 (간격 0).
                수업 코드는 간격이 음수인 차 — 내 차와 앞뒤로 겹쳐 있거나(나란히) 범퍼 사이가 2.5 m 안쪽인 차 — 를
@@ -33,16 +43,11 @@
              우선권과 상관없이 겹치는 차를 그대로 보여 준다 — 내가 우선인 길의 차, 상대가 기다려야 하는 차도 보인다.
     [43]     뒤에서 다가오는 사이렌 차까지 거리 / 100 m           (없으면 1)
     [44]     그 사이렌 차가 내 차로 바로 뒤에서 오면 1
-    [45]     앞차가 '정해진 정차' 중이면 1  (정류장의 버스, 아이를 태우는 차 — 신호 대기와 구분)
-    [46]     서야 할 곳 앞에 멈추려면 필요한 감속 / AV 의 최대 감속 (4.5 m/s²)   (서야 할 곳이 없으면 0)
-             서야 할 곳 = 빨강·노랑 신호의 정지선, 보행자가 있는 횡단보도,
-                          내 경로로 이어지지 않는 차로의 끝 (그 전에 옆 차로로 옮기면 사라진다).
-             0.5 면 '보통 세기로 지금 밟아야 한다', 1 이면 '온 힘으로 밟아도 늦었다'
-             (양보선은 넣지 않는다 — 양보할지는 정책이 [37..42] 를 보고 정한다)
-    [47]     앞차에 닿지 않으려면 필요한 감속 / AV 의 최대 감속        (앞차가 없거나 나보다 빠르면 0)
-    [48]     왼쪽 차로가 버스전용차로(실선)면 1
-    [49]     지금 차로가 버스전용차로(실선)면 1
-    [50]     오른쪽 차로가 버스전용차로(실선)면 1
+    [45]     왼쪽 차로가 버스전용차로(실선)면 1
+    [46]     지금 차로가 버스전용차로(실선)면 1
+    [47]     오른쪽 차로가 버스전용차로(실선)면 1
+    [48]     다음 신호의 색이 앞의 키 큰 차에 가려 안 보이면 1  (이때 [33] [34] 는 0)
+    [49]     사이렌 차가 키 큰 차에 가려 어느 차로에서 오는지 모르면 1  (이때 [44] 는 0)
     2026-11-24 에 뺀 것 (53 → 51차원): 앞차와의 간격 √ 눈금 (수업 코드의 [9] 와 같은 거리라 겹쳤다),
              지금 차로가 내 경로에서 끊기는 곳까지 거리 (1000 m 앞까지 내다봤다. 차로가 곧 끊기는지는
              차로 연결성 [21..25] 이 W(100 m) 안에서 알려 준다)
@@ -52,8 +57,6 @@
     W = mdp_config.OBSERVATION["visibility"] (100 m. 2026-11-24 컨설팅 반영으로 50 → 100)
     √ 눈금: 멈출 곳까지의 거리는 가까울수록 중요한데, d / W 로는 1 m 가 0.02 밖에 안 된다.
             √ 를 쓰면 1 m = 0.14, 3 m = 0.24, 10 m = 0.45 로 가까운 곳이 넓게 펼쳐진다.
-    [46] [47]: 거리와 속도가 따로 들어 있으면 '이 속도로 이 거리 안에 설 수 있나'를 신경망이 스스로 계산해 내야 한다
-            (속도² ÷ 거리). 그 계산을 미리 해서 넣어 준다. 운전자가 어림하는 '지금 밟아야 하나'와 같은 값이다.
 
 3) 보상 — 아래 REWARD 표. 수업 코드의 고속도로용 보상(train.py 의 collision_penalty 등)은 쓰지 않는다.
     값을 바꾸려면 아래 표를 고치거나, train.py 의 REWARD_OVERRIDES 에 같은 이름으로 적는다
@@ -109,6 +112,7 @@ import traci
 import traci.constants as tc
 
 from env import daehakro_builder
+from env import occlusion
 from env import daehakro_config as cfg
 from env.daehakro_emergency import EmergencyAssist
 from env.daehakro_map import RoadMap
@@ -175,7 +179,7 @@ LANE_RANGE = 1000.0         # m. 차로 안내(시범 운전자·보상용. 관�
                             #   · 1000 m 를 내다볼 때: 대학로에 들어서자마자 가운데 차로로 옮긴다 (큰길의 차가 지나간 틈에 들어선
                             #     직후라 옆이 비어 있다). 갈라지는 곳에서는 막 생긴 빈 차로로 한 번만 더 옮기면 된다.
                             #  (시범 운전자 240회 시험에서 로터리 입구에서 끝내 끼어들지 못한 횟수: 600 m 일 때 5회, 1000 m 일 때 0회)
-LANE_END_GAP = 1.0          # m. 경로가 이어지지 않는 차로의 끝 앞에 두는 거리 (관측 [46] 의 '서야 할 곳')
+LANE_END_GAP = 1.0          # m. 경로가 이어지지 않는 차로의 끝 앞에 두는 거리 (시범에서 '서야 할 곳'을 따질 때)
 OFF_ROUTE_SLACK = 1.0       # m. 경로가 이어지지 않는 차로의 끝을 이만큼 넘게 지나치려 하면 '경로 이탈'로 끝낸다.
                             #    그 차로로 계속 가면 실제로는 다른 길로 빠진다. SUMO 는 차를 차로 끝에 세워 두지만,
                             #    그건 정책이 세운 것이 아니므로 인정하지 않는다
@@ -243,14 +247,14 @@ DEMO_RUSH_STEPS = (2, 8)         # 급하게: 한 번의 길이 (스텝, 1~4초)
 DEMO_RUSH_BRAKING = 1.5          # 급하게: 속도를 줄이는 중일 때는 demo_noise 의 이 배수만큼 더 자주 시작한다
                                  #         (멈추러 가는 길에 흔들어야 '늦었을 때 세게 밟는' 장면이 생긴다)
 
-EXTRA_OBS = (               # 관측 [31..50] 의 이름 (순서대로)
+EXTRA_OBS = (               # 관측 [31..49] 의 이름 (순서대로)
     "speed_limit", "signal_dist", "signal_red", "signal_yellow",
     "crosswalk_dist", "crosswalk_ped",
     "cross1_my_dist", "cross1_dist", "cross1_speed",
     "cross2_my_dist", "cross2_dist", "cross2_speed",
-    "siren_dist", "siren_same_lane", "leader_stopped",
-    "stop_need", "close_need",
+    "siren_dist", "siren_same_lane",
     "bus_left", "bus_here", "bus_right",
+    "signal_hidden", "siren_lane_unknown",       # 2026-11-25 버스·소방차 가림 (env/occlusion.py)
 )
 CROSS_SHOWN = 2             # 관측에 넣는 '겹치는 차'의 수
 
@@ -426,13 +430,13 @@ class DaehakroEnv(SumoHighwayEnv):
         # 벌점 크기 (SCALED_PENALTIES 에 곱한다). train.py 가 학습 중에 바꾼다. 평가·시범·BC 에서는 1 그대로다
         self.penalty_scale = 1.0
 
-        # 관측: 수업 코드 31차원 + 대학로 20차원
+        # 관측: 수업 코드 31차원 + 대학로 19차원
         self.base_obs_dim = self.obs_dim
         self.obs_dim = self.base_obs_dim + len(EXTRA_OBS)
         self.observation_space = spaces.Box(-1.0, 1.0, shape=(self.obs_dim,), dtype=np.float32)
-        self._i_red, self._i_yellow, self._i_ped, self._i_siren, self._i_siren_lane, self._i_need = (
+        self._i_red, self._i_yellow, self._i_ped, self._i_siren, self._i_siren_lane = (
             self.base_obs_dim + EXTRA_OBS.index(k)
-            for k in ("signal_red", "signal_yellow", "crosswalk_ped", "siren_dist", "siren_same_lane", "stop_need"))
+            for k in ("signal_red", "signal_yellow", "crosswalk_ped", "siren_dist", "siren_same_lane"))
 
         self._route = []           # AV 경로 (edge 목록)
         self._reach = {}           # 경로의 각 차로 → 차로변경 없이 경로를 따라 갈 수 있는 거리 (그 차로 시작점 기준). 승용차 기준
@@ -444,6 +448,9 @@ class DaehakroEnv(SumoHighwayEnv):
         self._move_plan = 0.0      # 이번 스텝에 가려는 거리 (기록용. 2026-11-24 부터 차로변경 확인에는 쓰지 않는다)
         self._overrun = (None, 0.0)   # (차로, 경로가 이어지지 않는 그 차로의 끝을 넘어가려 한 거리의 합)
         self._snap = None          # 가장 최근에 본 AV 주변 상황 (_look 결과)
+        self.occlusion = occlusion.ENABLED   # 버스·소방차 가림 (env/occlusion.py). 환경변수 DAEHAKRO_OCCLUSION=0 이면 끔
+        self._occ_at, self._occ_memo = None, ({}, (0.0, 0.0))   # 이번 스텝의 (가리는 차들의 차체, AV 의 눈 위치)
+        self._foe_hidden = False   # 이번 스텝에 양보 대상 가운데 가려진 차가 있었는가 (시범에서 그 스텝을 뺄 때 쓴다)
         self._still = 0            # AV 가 연속으로 서 있는 스텝 수
         self._foe_passed = (-1e9, 0.0)   # 양보 대상이 마지막으로 상충 지점을 지난 (시각, 그때 내 남은 거리)
         self._fresh = True         # 지난 에피소드가 도로를 어지럽히지 않았는가 (아니면 SUMO 를 새로 켠다)
@@ -578,7 +585,8 @@ class DaehakroEnv(SumoHighwayEnv):
         # AV 둘레의 차도 같은 방법으로 받아 온다 (옆 차로의 앞차·뒤차 찾기용, _side_gaps).
         traci.vehicle.subscribeContext(
             self.ego_id, tc.CMD_GET_VEHICLE_VARIABLE, SIDE_RANGE,
-            [tc.VAR_LANE_ID, tc.VAR_LANEPOSITION, tc.VAR_SPEED, tc.VAR_LENGTH])
+            [tc.VAR_LANE_ID, tc.VAR_LANEPOSITION, tc.VAR_SPEED, tc.VAR_LENGTH,
+             tc.VAR_POSITION, tc.VAR_ANGLE, tc.VAR_TYPE])       # 위치·방향·차종: 버스·소방차 가림 (env/occlusion.py)
 
         if self.gui:
             try:
@@ -608,7 +616,12 @@ class DaehakroEnv(SumoHighwayEnv):
              "odo": traci.vehicle.getDistance(ego),  # 출발 후 달린 거리
              "limit": self.map.speed.get(lane, self.vmax),
              "tls": None, "cw": None, "foe": None, "cross": [], "siren": None,
-             "gap": None, "lead_v": 0.0, "leader_stopped": False}
+             "gap": None, "lead_v": 0.0, "leader_stopped": False,
+             # 버스·소방차 가림 (env/occlusion.py). 위의 tls·cw·foe·siren 은 실제 상황 그대로 두고(판정·보상·시범 운전자용),
+             # 관측을 만들 때만 아래 값을 본다.
+             "tls_hidden": False,      # 신호 색이 앞의 버스·소방차에 가려 안 보인다
+             "cw_seen": False,         # 기다려야 할 보행자가 '보인다' (cw[2] 는 실제로 있는가)
+             "foe_hidden": False}      # 양보 대상 가운데 가려진 차가 있다
         # 차로 안내: (옮겨야 하는 차로 수, 지금 차로로 더 갈 수 있는 거리, 이 차로가 이 구간 끝에서 끊기는가)
         s["guide"], s["reach"], s["dead"], s["reach_av"] = self._lane_plan(lane, pos, inside)
         try:
@@ -621,9 +634,11 @@ class DaehakroEnv(SumoHighwayEnv):
             path = self.map.path_ahead(lane, pos, self._route, self.visibility + 5.0)
             nc = self.map.next_crossing(path)
             if nc and nc[1] <= self.visibility:
-                s["cw"] = (nc[0], nc[1]) + self._ped_risk(nc[0], nc[2])
+                wait, touch, seen = self._ped_risk(nc[0], nc[2])
+                s["cw"], s["cw_seen"] = (nc[0], nc[1], wait, touch), seen
 
-            s["foe"], s["cross"] = self._yield_foe(v)   # foe: 양보 판정·감점용 (관측에는 넣지 않는다) / cross: 관측용
+            s["foe"], s["cross"] = self._yield_foe(v)   # foe: 양보 판정·감점용 (관측에는 넣지 않는다) / cross: 관측용 (보이는 차만)
+            s["foe_hidden"] = self._foe_hidden
             s["siren"] = self._siren()
 
             # 앞차: 간격은 SUMO 방식대로 '충돌 기준까지 남은 거리' (범퍼 사이 거리 − 2.5 m)
@@ -632,6 +647,9 @@ class DaehakroEnv(SumoHighwayEnv):
                 s["gap"] = float(ld[1]) + self._gap_shift
                 s["lead_v"] = float(traci.vehicle.getSpeed(ld[0]))
                 s["leader_stopped"] = bool(traci.vehicle.isStopped(ld[0]))
+                if self.occlusion and s["tls"]:      # 바로 앞차가 버스·소방차면 신호등이 그 지붕에 가릴 수 있다
+                    kind = occlusion.tall_kind(traci.vehicle.getTypeID(ld[0]))
+                    s["tls_hidden"] = occlusion.signal_hidden(kind, float(ld[1]) + traci.vehicle.getMinGap(ego), s["tls"][1])
         except traci.TraCIException:
             self.look_errors += 1                    # 조회 중 사라진 차 등: 못 읽은 항목은 '없음'으로 둔다
         return s
@@ -646,7 +664,8 @@ class DaehakroEnv(SumoHighwayEnv):
     def _ped_risk(self, cid, my_s):
         """횡단보도 cid 에서 보행자 때문에 기다려야 하는가. 내 경로는 횡단보도 위 위치 my_s 를 지난다.
 
-        Returns: (기다려야 하는가, 지금 들어가면 닿을 수 있는가)
+        Returns: (기다려야 하는가, 지금 들어가면 닿을 수 있는가, 기다려야 할 보행자가 보이는가)
+                 세 번째 값은 관측용이다: 기다려야 할 보행자가 모두 버스·소방차 뒤에 있으면 False (env/occlusion.py).
 
         기다려야 하는가 — 관측의 crosswalk_ped. 다음 중 하나면 True.
           · 횡단보도 위에서 내 경로 쪽으로 걸어오는 사람이 PED_LOOKAHEAD 안에 있다
@@ -658,16 +677,17 @@ class DaehakroEnv(SumoHighwayEnv):
         """
         c = self.map.cross[cid]
         people = traci.vehicle.getContextSubscriptionResults(self.ego_id) or {}
-        wait, touch, may_start = False, False, None
+        wait, touch, seen, may_start = False, False, False, None
         for d in people.values():
             if tc.VAR_NEXT_EDGE not in d:
                 continue                             # 보행자가 아니라 차 (둘레의 차도 같은 조회 결과에 들어 있다)
             road = d[tc.VAR_ROAD_ID]
+            this = False                             # 이 사람 때문에 기다려야 하는가
             if road == cid:                          # 건너는 중
                 forward = math.cos(math.radians(d[tc.VAR_ANGLE] - c["angle"])) >= 0.0
                 s = d[tc.VAR_LANEPOSITION]
                 togo = (my_s - s) if forward else (s - my_s)     # 내 경로까지 남은 거리 (음수 = 지나감)
-                wait = wait or -PED_PASSED <= togo <= PED_LOOKAHEAD + _PED_HALF
+                this = -PED_PASSED <= togo <= PED_LOOKAHEAD + _PED_HALF
                 touch = touch or -PED_CLEAR <= togo <= PED_LOOKAHEAD
             elif road in c["wa"] and d[tc.VAR_NEXT_EDGE] == cid:  # 건너려고 대기 공간에 들어섬
                 xy = d[tc.VAR_POSITION]
@@ -677,10 +697,13 @@ class DaehakroEnv(SumoHighwayEnv):
                 if may_start is None:
                     may_start = self._ped_may_start(c)
                 if may_start:
-                    wait = touch = True
-            if wait and touch:
+                    this = touch = True
+            if this:
+                wait = True
+                seen = seen or not self._hidden_point(d[tc.VAR_POSITION])
+            if wait and touch and seen:
                 break
-        return wait, touch
+        return wait, touch, seen
 
     def _time_to(self, dist, v):
         """지금 속도 v 에서 최대로 가속하며 dist 를 가는 데 걸리는 시간 (s)."""
@@ -706,6 +729,7 @@ class DaehakroEnv(SumoHighwayEnv):
         """
         now = traci.simulation.getTime()
         best, cut_in, cross = None, False, []
+        self._foe_hidden = False
         for f in traci.vehicle.getJunctionFoes(self.ego_id, self.visibility):
             foe, my_d, foe_d, my_out, foe_out, _, _, i_yield, _ = f
             if foe_out <= 0.0:                       # 그 차는 이미 지나갔다
@@ -714,7 +738,11 @@ class DaehakroEnv(SumoHighwayEnv):
                 continue
             fv = traci.vehicle.getSpeed(foe)
             t_foe = 0.0 if foe_d <= 0.0 else (foe_d / fv if fv > 0.1 else _INF)
-            cross.append((t_foe, max(foe_d, 0.0), max(my_d, 0.0), fv))
+            hidden = self._hidden_vehicle(foe)       # 버스·소방차 뒤에 있다 → 관측에는 넣지 않는다 (판정은 그대로)
+            if not hidden:
+                cross.append((t_foe, max(foe_d, 0.0), max(my_d, 0.0), fv))
+            elif i_yield or traci.vehicle.getRoadID(foe).startswith(":"):
+                self._foe_hidden = True
             if not i_yield and not traci.vehicle.getRoadID(foe).startswith(":"):
                 continue                             # 내가 우선이고 그 차는 아직 교차로 밖 → 그 차가 기다린다
             t_foe_out = foe_out / fv if fv > 0.1 else _INF
@@ -737,7 +765,8 @@ class DaehakroEnv(SumoHighwayEnv):
     def _siren(self):
         """뒤에서 다가오는 사이렌 차.
 
-        Returns: (거리 m, 내가 그 차의 차로 앞을 막고 있는가) 또는 None.
+        Returns: (거리 m, 내가 그 차의 차로 앞을 막고 있는가, 그 차가 버스·소방차에 가려 안 보이는가) 또는 None.
+        거리는 소리로 안다 (가려져도 그대로). 어느 차로에서 오는지는 봐야 안다 (env/occlusion.py).
         '막고 있다'는 기준은 긴급차 보조가 일반 차를 비키게 하는 기준과 같다
         (그 차의 차로 앞 make_way_dist 안에 있음).
         """
@@ -763,8 +792,10 @@ class DaehakroEnv(SumoHighwayEnv):
             ahead = (ex - x) * math.sin(a) + (ey - y) * math.cos(a)     # 내가 그 차의 앞쪽에 있는가
             if blocking or (ahead > 0.0 and math.cos(a - ea) > 0.5 and dist <= SIREN_RANGE):
                 if best is None or dist < best[0]:
-                    best = (dist, blocking)
-        return best
+                    best = (dist, blocking, ev)
+        if best is None:
+            return None
+        return best[0], best[1], self._hidden_vehicle(best[2])
 
     # ==================================================================
     # 관측
@@ -784,6 +815,13 @@ class DaehakroEnv(SumoHighwayEnv):
            안 되는' 상태가 된다. 그래서 안전 검사가 보는 옆 차(_side_gaps — 구간 경계 너머까지 찾는다)도
            함께 보고 더 가까운 쪽을 관측에 넣는다. 나란히 있는 차의 간격은 0 으로 한다.
         """
+        if abs(offset) >= 2 and self.occlusion and self._occluders()[0]:
+            far = self._far_lane_seen(offset)        # 버스·소방차 너머의 차는 뺀다 (env/occlusion.py)
+            if far is not None:
+                hit = far[0] if leader else far[1]
+                if hit is None or hit[0] < 0 or hit[0] > self.visibility:
+                    return None
+                return float(hit[0]), float(hit[1])
         res = super()._neighbor(offset, leader)
         if res is not None and leader and self._gap_shift and abs(offset) <= 1:
             res = (res[0] + self._gap_shift, res[1])
@@ -818,16 +856,21 @@ class DaehakroEnv(SumoHighwayEnv):
             return 0.0
         return min(v * v / (2.0 * max(dist, 0.05)) / self.max_decel, 1.0)
 
-    def _stop_need(self, s, tls_state=None, cw_wait=None):
+    def _stop_need(self, s, tls_state=None, cw_wait=None, seen=True):
         """서야 할 곳 앞에 멈추려면 얼마나 세게 밟아야 하는가 (0~1). 서야 할 곳이 없으면 0.
 
         서야 할 곳: 빨강·노랑 신호의 정지선, 기다려야 할 보행자가 있는 횡단보도, 내 경로로 이어지지 않는 차로의 끝.
         (양보선은 넣지 않는다. 양보할지는 정책이 겹치는 차 [37..42] 를 보고 정한다.)
         여럿이면 가장 급한 것. tls_state / cw_wait 를 주면 그 값으로 판단한다 (시범용 관측을 맞출 때).
+        seen=True (관측용): 가려진 신호와 가려진 보행자는 뺀다 (env/occlusion.py). 넣으면 이 값으로 다 알게 된다.
+        seen=False: 실제 상황 그대로 (시범에서 '가려진 것 때문에 밟은 스텝'을 찾을 때).
         """
         tls, cw = s["tls"], s["cw"]
         tls_state = tls[2] if (tls and tls_state is None) else tls_state
-        cw_wait = bool(cw and cw[2]) if cw_wait is None else cw_wait
+        if cw_wait is None:
+            cw_wait = bool(cw and (s["cw_seen"] if seen else cw[2]))
+        if seen and s["tls_hidden"]:
+            tls = None
         need = 0.0
         if tls and tls_state in RED_STATES + "yY":
             need = max(need, self._need(s["v"], tls[1] - SIGNAL_STOP_GAP))
@@ -903,18 +946,100 @@ class DaehakroEnv(SumoHighwayEnv):
         return [
             s["limit"] / self.vmax,
             _near(tls[1], SIGNAL_RANGE) if tls else 1.0,
-            1.0 if tls and tls[2] in RED_STATES else 0.0,
-            1.0 if tls and tls[2] in "yY" else 0.0,
+            1.0 if tls and tls[2] in RED_STATES and not s["tls_hidden"] else 0.0,
+            1.0 if tls and tls[2] in "yY" and not s["tls_hidden"] else 0.0,
             _near(cw[1], w) if cw else 1.0,
-            1.0 if cw and cw[2] else 0.0,
+            1.0 if cw and s["cw_seen"] else 0.0,
             *cross,
             siren[0] / SIREN_RANGE if siren else 1.0,
-            1.0 if siren and siren[1] else 0.0,
-            1.0 if s["leader_stopped"] else 0.0,
-            self._stop_need(s),
-            self._close_need(s),
+            1.0 if siren and siren[1] and not siren[2] else 0.0,
             *(1.0 if self._bus_lane_at(off) else 0.0 for off in (1, 0, -1)),
+            1.0 if tls and s["tls_hidden"] else 0.0,         # 신호가 있는데 색이 안 보인다
+            1.0 if siren and siren[2] else 0.0,              # 사이렌 차가 어느 차로에서 오는지 안 보인다
         ]
+
+    # ---- 버스·소방차 가림 (env/occlusion.py) ----
+    def _occluders(self):
+        """이번 스텝의 (가리는 차들의 차체 {id: 네 꼭짓점}, AV 의 눈 위치). 같은 시각에는 한 번만 만든다."""
+        now = traci.simulation.getTime()
+        if self._occ_at == now:
+            return self._occ_memo
+        bodies = {}
+        if self.occlusion:
+            for vid, d in (traci.vehicle.getContextSubscriptionResults(self.ego_id) or {}).items():
+                if vid == self.ego_id or tc.VAR_TYPE not in d:
+                    continue                             # 내 차 / 보행자
+                kind = occlusion.tall_kind(d[tc.VAR_TYPE])
+                if kind:
+                    bodies[vid] = occlusion.body(d[tc.VAR_POSITION], d[tc.VAR_ANGLE], d[tc.VAR_LENGTH],
+                                                 occlusion.TALL_WIDTH[kind])
+        x, y = traci.vehicle.getPosition(self.ego_id)
+        fx, fy = occlusion.heading(traci.vehicle.getAngle(self.ego_id))
+        self._occ_at = now
+        self._occ_memo = (bodies, (x - fx * occlusion.EYE_BACK, y - fy * occlusion.EYE_BACK))
+        return self._occ_memo
+
+    def _hidden_point(self, xy):
+        """그 지점(보행자)이 버스·소방차 뒤에 있어 안 보이는가."""
+        if not self.occlusion:
+            return False
+        bodies, eye = self._occluders()
+        return bool(bodies) and occlusion.blocked(eye, tuple(xy), bodies)
+
+    def _hidden_vehicle(self, vid):
+        """그 차가 버스·소방차 뒤에 있어 안 보이는가. 앞끝·가운데·뒤끝이 모두 가려져야 True (일부라도 보이면 보인다)."""
+        if not self.occlusion:
+            return False
+        bodies, eye = self._occluders()
+        if not bodies:
+            return False
+        d = (traci.vehicle.getContextSubscriptionResults(self.ego_id) or {}).get(vid)
+        try:
+            if d and tc.VAR_POSITION in d and tc.VAR_LENGTH in d:
+                pts = occlusion.points(d[tc.VAR_POSITION], d[tc.VAR_ANGLE], d[tc.VAR_LENGTH])
+            else:                                        # 조회 범위(SIDE_RANGE) 밖의 차
+                pts = occlusion.points(traci.vehicle.getPosition(vid), traci.vehicle.getAngle(vid),
+                                       traci.vehicle.getLength(vid))
+        except traci.TraCIException:
+            return False
+        return all(occlusion.blocked(eye, p, bodies, skip=vid) for p in pts)
+
+    def _far_lane_seen(self, offset):
+        """두 칸 옆 차로(±2)의 '보이는' 차만으로 수업 코드와 같은 값을 만든다.
+        Returns: (앞차 (간격, 속도) 또는 None, 뒤차 또는 None, 전방 밀도 0~1). 조회하지 못하면 None."""
+        try:
+            edge = traci.vehicle.getRoadID(self.ego_id)
+            li = traci.vehicle.getLaneIndex(self.ego_id) + offset
+            if edge.startswith(":") or li < 0 or li >= traci.edge.getLaneNumber(edge):
+                return None
+            lane_id = f"{edge}_{li}"
+            my_pos = traci.vehicle.getLanePosition(self.ego_id)
+            remaining = traci.lane.getLength(lane_id) - my_pos
+            links = traci.lane.getLinks(lane_id)
+            usable = self.visibility if links else min(self.visibility, remaining)
+            front, rear, count = None, None, 0
+            for vid in traci.lane.getLastStepVehicleIDs(lane_id):
+                if vid == self.ego_id or self._hidden_vehicle(vid):
+                    continue
+                d = traci.vehicle.getLanePosition(vid) - my_pos
+                if d >= 0:
+                    g = d - traci.vehicle.getLength(vid)
+                    if front is None or g < front[0]:
+                        front = (g, traci.vehicle.getSpeed(vid))
+                else:
+                    g = -d - traci.vehicle.getLength(self.ego_id)
+                    if rear is None or g < rear[0]:
+                        rear = (g, traci.vehicle.getSpeed(vid))
+                if 0.0 < d <= min(self.visibility, remaining):
+                    count += 1
+            if links and remaining < self.visibility:
+                for vid in traci.lane.getLastStepVehicleIDs(links[0][0]):
+                    if traci.vehicle.getLanePosition(vid) <= self.visibility - remaining and not self._hidden_vehicle(vid):
+                        count += 1
+            density = 1.0 if usable <= 0 else float(np.clip(count / (usable / self.density_veh_len), 0.0, 1.0))
+            return front, rear, density
+        except traci.TraCIException:
+            return None
 
     def _bus_lane_at(self, offset):
         """지금 차로에서 offset 만큼 옆 차로(+1 왼쪽, 0 지금 차로, −1 오른쪽)가 버스전용차로(실선)인가."""
@@ -951,7 +1076,7 @@ class DaehakroEnv(SumoHighwayEnv):
          1 : W 이내에서 내 경로를 따라 계속 이어짐
         0~1: (그 차로로 더 갈 수 있는 거리 / W) — 곧 내 경로에서 벗어나는 차로
         일반 차로는 승용차가 다녀도 되는 길 기준 (버스전용 실선이 시작되면 거기서 끊긴 것으로 본다).
-        버스전용차로·버스 베이는 AV 가 실제로 갈 수 있는 거리 기준 (그 차로가 버스전용인지는 [48..50] 이 알려 준다).
+        버스전용차로·버스 베이는 AV 가 실제로 갈 수 있는 거리 기준 (그 차로가 버스전용인지는 [45..47] 이 알려 준다).
         지도(net.xml)와 경로만으로 계산한다 (RoadMap.reach_table).
         """
         lane = self._offset_lane(offset)
@@ -967,6 +1092,10 @@ class DaehakroEnv(SumoHighwayEnv):
         lane = self._offset_lane(offset)
         if lane is not None and lane in self.map.av_ok and not self.map.av_ok[lane]:
             return 1.0                               # 보도 = 꽉 찬 차로 취급
+        if abs(offset) >= 2 and self.occlusion and self._occluders()[0]:
+            far = self._far_lane_seen(offset)        # 버스·소방차 너머의 차는 세지 않는다 (env/occlusion.py)
+            if far is not None:
+                return far[2]
         return super()._lane_density(offset)
 
     # ==================================================================
@@ -1359,16 +1488,26 @@ class DaehakroEnv(SumoHighwayEnv):
                 # 시범에서는 그 값으로 판정하고, 정답과 짝이 맞도록 저장용 관측에도 그 값을 넣는다.
                 if tls:
                     tls_state = self._signal_now(tls)
+                cw_seen = bool(cw and before["cw_seen"])     # 기다려야 할 보행자가 '보였는가' (버스·소방차 가림)
                 if cw and after and after["cw"] and after["cw"][0] == cw[0]:
                     cw_touch = after["cw"][3]
                     cw_wait = cw_wait or after["cw"][2]      # 멈춤 규칙은 이전 값을, SUMO 는 새 값을 보고 움직였다
+                    cw_seen = cw_seen or after["cw_seen"]
+                tls_seen = bool(tls and not before["tls_hidden"])
                 fixed = seen.copy()
                 if tls:
-                    fixed[self._i_red] = 1.0 if tls_state in RED_STATES else 0.0
-                    fixed[self._i_yellow] = 1.0 if tls_state in "yY" else 0.0
+                    fixed[self._i_red] = 1.0 if (tls_seen and tls_state in RED_STATES) else 0.0
+                    fixed[self._i_yellow] = 1.0 if (tls_seen and tls_state in "yY") else 0.0
                 if cw:
-                    fixed[self._i_ped] = 1.0 if cw_wait else 0.0
-                fixed[self._i_need] = self._stop_need(before, tls_state, cw_wait)
+                    fixed[self._i_ped] = 1.0 if cw_seen else 0.0
+                need_seen = self._stop_need(before, tls_state, cw_seen)   # 보이는 것만으로 서야 하는 정도 (관측에는 넣지 않는다)
+                # 가려진 것 때문에 SUMO 가 다르게 운전했을 수 있는 스텝 (저장하지 않는다 — 관측에 이유가 없는 정답이 된다):
+                #   가려진 신호·보행자 때문에 서야 하는 스텝, 가려진 양보 대상이 있는 스텝, 가려진 사이렌 차에 비켜 주는 스텝
+                sir = before["siren"]
+                info["demo_blind"] = bool(
+                    self._stop_need(before, tls_state, cw_wait, seen=False) > need_seen + 1e-6
+                    or before["foe_hidden"]
+                    or (DEMO_YIELD and sir and sir[1] and sir[2]))
                 # 시범 운전자(SUMO)는 사이렌에 반응하지 않는다. 한 시간에 두 번뿐인 긴급차 장면이 엉뚱한 버릇으로
                 # 배워지지 않도록, 시범용 관측에서는 '사이렌 없음'으로 둔다. (긴급차 양보는 PPO 가 보상으로 배운다.)
                 if not DEMO_YIELD:
@@ -1378,8 +1517,8 @@ class DaehakroEnv(SumoHighwayEnv):
                 info["demo_reason"] = bool(
                     before["gap"] is not None                                      # 앞차가 있다
                     or before["cross"]                                             # 교차로에서 내 길과 겹치는 차가 보인다
-                    or (tls and tls_state not in "Gg" and tls[1] <= DEMO_STOP_NEAR)   # 바로 앞 신호가 초록이 아니다
-                    or (cw and cw_wait and cw[1] <= DEMO_STOP_NEAR)                # 바로 앞 횡단보도에 보행자가 있다
+                    or (tls_seen and tls_state not in "Gg" and tls[1] <= DEMO_STOP_NEAR)   # 바로 앞 신호가 초록이 아니다 (보일 때)
+                    or (cw and cw_seen and cw[1] <= DEMO_STOP_NEAR)                # 바로 앞 횡단보도에 보행자가 보인다
                     or before["reach"] < self.visibility)                          # 이 차로가 곧 경로에서 끊긴다 (차로변경 대기)
             # 신호위반: 이번 스텝에 정지선을 넘었고, 넘는 그 순간 실제 신호가 빨강이었다.
             #   SUMO 는 스텝 맨 앞에서 신호를 바꾼 뒤 차를 움직이므로, 스텝이 끝난 뒤 읽은 신호가 정지선을 넘을 때의 신호다.
@@ -1405,7 +1544,8 @@ class DaehakroEnv(SumoHighwayEnv):
             self._braking = bool(action is not None and after["v"] > 2.0 and after["v"] - before["v"] <= -0.5)
             info["demo_unexplained"] = bool(action is not None and not info["demo_reason"]
                                             and before["v"] < 0.05 and after["v"] < 0.05)
-            info["demo_action"] = None if info["demo_unexplained"] else action
+            info.setdefault("demo_blind", False)
+            info["demo_action"] = None if (info["demo_unexplained"] or info["demo_blind"]) else action
 
         info["collision_with"] = None
         if info["collided"]:
@@ -1507,9 +1647,10 @@ class DaehakroEnv(SumoHighwayEnv):
         out = [f"제한 {s['limit'] * 3.6:.0f} km/h"]
         if s["tls"]:
             color = "빨강" if s["tls"][2] in RED_STATES else "노랑" if s["tls"][2] in "yY" else "초록"
-            out.append(f"신호 {s['tls'][1]:.0f} m {color}")
+            out.append(f"신호 {s['tls'][1]:.0f} m {color}" + (" (가려서 안 보임)" if s["tls_hidden"] else ""))
         if s["cw"]:
-            out.append(f"횡단보도 {s['cw'][1]:.0f} m" + (" 보행자 있음" if s["cw"][2] else ""))
+            out.append(f"횡단보도 {s['cw'][1]:.0f} m" + (" 보행자 있음" if s["cw"][2] else "")
+                       + (" (가려서 안 보임)" if s["cw"][2] and not s["cw_seen"] else ""))
         for k, (my_d, foe_d, fv) in enumerate(s["cross"][:CROSS_SHOWN]):
             out.append(f"겹치는 차 {k + 1}: 나 {my_d:.0f} m / 그 차 {foe_d:.0f} m, {fv * 3.6:.0f} km/h")
         if s["foe"]:
@@ -1518,7 +1659,8 @@ class DaehakroEnv(SumoHighwayEnv):
         if bus:
             out.append("버스전용: " + "·".join(bus))
         if s["siren"]:
-            out.append(f"사이렌 {s['siren'][0]:.0f} m" + (" (내 차로)" if s["siren"][1] else ""))
+            out.append(f"사이렌 {s['siren'][0]:.0f} m" + (" (내 차로)" if s["siren"][1] else "")
+                       + (" (가려서 차로 모름)" if s["siren"][2] else ""))
         if s["leader_stopped"]:
             out.append("앞차 정차 중")
         if s["guide"]:
