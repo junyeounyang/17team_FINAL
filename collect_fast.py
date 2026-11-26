@@ -102,7 +102,7 @@ class Flat:
 
 
 VEH = {"veh_name": np.int32, "veh_x": np.int32, "veh_y": np.int32, "veh_lane_pos": np.int32, "veh_speed": np.int16,
-       "veh_lane": np.int8, "veh_lane_code": np.int16, "veh_type": np.int8, "veh_stopped": np.bool_,
+       "veh_lane": np.int8, "veh_lane_code": np.int16, "veh_type": np.int16, "veh_stopped": np.bool_,
        "veh_signals": np.int16, "veh_assist": np.int8}
 PER = {"per_name": np.int32, "per_child": np.int8, "per_x": np.int32, "per_y": np.int32, "per_speed": np.int16,
        "per_place": np.int16}
