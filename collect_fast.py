@@ -314,6 +314,23 @@ def count_machine(out_dir, machine):
     return n
 
 
+def ensure_road():
+    """도로·교통 파일을 SUMO 들을 띄우기 전에 한 번만 준비한다.
+    (처음 받은 폴더에서는 도로 파일을 새로 만든다. 여러 SUMO 가 동시에 만들면 쓰는 중인 파일을 읽어 죽는다.)"""
+    import xml.etree.ElementTree as ET
+    sys.path.insert(0, BASE)
+    from env import daehakro_env, daehakro_builder
+    cfg = daehakro_env.build()
+    folder = os.path.dirname(cfg)
+    try:
+        for name in ("daehakro.net.xml", "daehakro.rou.xml", "daehakro.sumocfg"):
+            ET.parse(os.path.join(folder, name))
+    except Exception:
+        print("도로 파일이 깨져 있어 다시 만듭니다", flush=True)
+        cfg = daehakro_builder.build(verbose=False)
+    return cfg
+
+
 def keep_awake():
     """윈도우: 도는 동안 절전으로 들어가지 않게 한다. 다른 곳에서는 아무 일도 하지 않는다."""
     if os.name == "nt":
@@ -389,6 +406,7 @@ def main():
         print("이미 몫을 다 모았습니다. 더 모으려면 --target 을 늘려 주세요.")
         status(out_dir)
         return
+    ensure_road()
     t0 = time.time()
     ctx = mp.get_context("spawn")
     count = ctx.Value("q", have)
