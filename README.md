@@ -16,8 +16,8 @@ BC → PPO 로 학습한 자율주행 정책이다. 이 저장소에는 최종 �
 
 | 기기 | 번호 | 모을 양 | 시험 속도 |
 |---|---|---|---|
-| 맥북 | 1 | 4,800,000 스텝 | 194 스텝/s |
-| 윈도우 | 2 | 3,300,000 스텝 | 133 스텝/s |
+| 윈도우 (가장 빠른 기기) | 1 | 4,800,000 스텝 | 194 스텝/s |
+| 맥북 | 2 | 3,300,000 스텝 | 133 스텝/s |
 | 윈도우 | 3 | 2,400,000 스텝 | 98 스텝/s |
 
 합계 10,500,000 스텝. 속도에 맞춰 나눴기 때문에 세 대가 거의 같은 시각(약 7시간 뒤)에 끝난다.
@@ -27,8 +27,8 @@ git clone -b final https://github.com/junyeounyang/17team_FINAL.git 17team_submi
 cd 17team_submit
 conda activate sumo-rl                       # SUMO 와 torch 가 있는 환경
 
-python collect_fast.py --machine 2 --test    # 1) 시험 (2~3분). 끝에 "시험 결과" 줄이 나오면 정상
-python collect_fast.py --machine 2           # 2) 본 수집. 몫을 다 모으면 스스로 끝난다
+python collect_fast.py --machine 1 --test    # 1) 시험 (2~3분). 끝에 "시험 결과" 줄이 나오면 정상. 번호는 자기 기기 것으로
+python collect_fast.py --machine 1           # 2) 본 수집. 몫을 다 모으면 스스로 끝난다
 python collect_fast.py --status              # 모은 양 확인 (다른 창에서)
 ```
 
