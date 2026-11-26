@@ -24,8 +24,8 @@
   2. 길이를 0.01 m, 속도를 0.01 m/s 단위의 정수로 저장한다 (수업 수집기는 소수 넷째 자리).
   3. 모든 차의 상태를 SUMO 에서 한 번에 받아 온다 (구독). 수업 수집기는 차 한 대, 값 하나마다 따로 물어서 느리다.
      값이 같은지는 --check 로 확인한다 (50 스텝마다 수업 방식으로도 읽어 견준다).
-  4. next_observation 은 판의 마지막 스텝 것만 저장한다 (final_observation). 나머지는 다음 줄의 observation 과 같다.
-     판이 끝난 뒤의 state(next_state)는 저장하지 않는다.
+  4. next_observation 과 next_state 는 수업 수집기처럼 판의 마지막 스텝 것만 저장한다 (final_observation, fin_*).
+     나머지 스텝의 next_* 는 다음 줄의 observation / state 와 같다.
 
 파일 안의 배열 (N = 스텝 수, 한 줄이 한 스텝)
   스텝        episode, t, observation(N,50), action_raw(N,2), accel_raw, lane_change_raw, lane_change, lane_change_applied,
@@ -39,6 +39,11 @@
   상충 차량   foe_off(N+1), foe_name, foe_my_dist, foe_dist (cm), foe_i_yield
   감지 차량   det_off(N+1), det_name, det_rel_pos (cm), det_lane_offset      — 관측 시야에 든 차 (x, y, 속도는 '다른 차'에 있다)
   판          ep_id(E), ep_steps(E), final_observation(E,50)
+  판이 끝난 뒤의 state (마지막 스텝의 next_state. 한 줄이 한 판)
+              fin_ego_alive, fin_sim_time, fin_tls(E,137), fin_ego_x, fin_ego_y, fin_ego_lane_pos, fin_ego_speed,
+              fin_ego_lane, fin_ego_lane_code      — AV 가 도로에 없으면(도착해서 사라짐) fin_ego_alive = 0 이고 AV 값은 0, 차로 번호는 -1
+              fin_veh_off(E+1) + fin_veh_*, fin_per_off(E+1) + fin_per_*, fin_foe_off(E+1) + fin_foe_*
+              — AV 가 도로에 남아 있을 때만 채운다 (수업 수집기의 get_privileged_state 와 같다)
   번호표      names, lanes, types, places (문자열 배열), meta (json 문자열: 모델, 기기, seed, 가림 설정 등)
 """
 import argparse
@@ -103,6 +108,8 @@ PER = {"per_name": np.int32, "per_child": np.int8, "per_x": np.int32, "per_y": n
        "per_place": np.int16}
 FOE = {"foe_name": np.int32, "foe_my_dist": np.int32, "foe_dist": np.int32, "foe_i_yield": np.int8}
 DET = {"det_name": np.int32, "det_rel_pos": np.int32, "det_lane_offset": np.int8}
+FIN = {"fin_ego_alive": np.bool_, "fin_sim_time": np.float32, "fin_ego_x": np.int32, "fin_ego_y": np.int32,
+       "fin_ego_lane_pos": np.int32, "fin_ego_speed": np.int16, "fin_ego_lane": np.int8, "fin_ego_lane_code": np.int16}
 STEP = {"episode": np.int64, "t": np.int32, "accel_raw": np.float32, "lane_change_raw": np.float32, "lane_change": np.int8,
         "lane_change_applied": np.bool_, "reward": np.float32, "terminated": np.bool_, "truncated": np.bool_,
         "collided": np.bool_, "arrived": np.bool_, "lane_before": np.int8, "lane_after": np.int8,
@@ -174,6 +181,8 @@ def worker(a):
             S = {k: [] for k in STEP}
             obs_buf, act_buf, tls_buf, final_obs, ep_id, ep_steps = [], [], [], [], [], []
             veh, per, foe, det = Flat(VEH), Flat(PER), Flat(FOE), Flat(DET)
+            fveh, fper, ffoe = Flat(VEH), Flat(PER), Flat(FOE)       # 판이 끝난 뒤의 state
+            FS, fin_tls = {k: [] for k in FIN}, []
             t0, checked, worst = time.time(), 0, 0.0
             for e in range(episodes):
                 gid = machine * 10_000_000 + wid * 100_000 + c * 100 + e
@@ -261,6 +270,57 @@ def worker(a):
                     S["collision_with"].append(names(who) if who else -1)
                     obs, t = nxt, t + 1
                 final_obs.append(np.asarray(obs, np.float32)); ep_id.append(gid); ep_steps.append(t)
+                # ── 판이 끝난 뒤의 state (마지막 스텝의 next_state) ──
+                ego = env.ego_id
+                alive = ego in traci.vehicle.getIDList()
+                FS["fin_ego_alive"].append(alive); FS["fin_sim_time"].append(traci.simulation.getTime())
+                row = []
+                for tl in env.RECORD_TLS_ORDER:
+                    row.extend(env.RECORD_TLS_CODE[ch] for ch in traci.trafficlight.getRedYellowGreenState(tl))
+                fin_tls.append(row)
+                n_fin = 0
+                if alive:
+                    ex, ey = traci.vehicle.getPosition(ego)
+                    FS["fin_ego_x"].append(to_cm(ex)); FS["fin_ego_y"].append(to_cm(ey))
+                    FS["fin_ego_speed"].append(to_cm(traci.vehicle.getSpeed(ego)))
+                    FS["fin_ego_lane"].append(traci.vehicle.getLaneIndex(ego))
+                    FS["fin_ego_lane_code"].append(lanes(traci.vehicle.getLaneID(ego)))
+                    FS["fin_ego_lane_pos"].append(to_cm(traci.vehicle.getLanePosition(ego)))
+                    for vid, r in all_vehicles().items():
+                        x, y = r[tc.VAR_POSITION]
+                        if radius > 0 and (x - ex) ** 2 + (y - ey) ** 2 > radius * radius:
+                            continue
+                        cc = fveh.cols
+                        cc["veh_name"].append(names(vid)); cc["veh_x"].append(to_cm(x)); cc["veh_y"].append(to_cm(y))
+                        cc["veh_speed"].append(to_cm(r[tc.VAR_SPEED])); cc["veh_lane"].append(r[tc.VAR_LANE_INDEX])
+                        cc["veh_lane_code"].append(lanes(r[tc.VAR_LANE_ID]))
+                        cc["veh_lane_pos"].append(to_cm(r[tc.VAR_LANEPOSITION]))
+                        cc["veh_type"].append(types(r[tc.VAR_TYPE])); cc["veh_stopped"].append(bool(r[tc.VAR_STOPSTATE] & 1))
+                        cc["veh_signals"].append(r[tc.VAR_SIGNALS]); cc["veh_assist"].append(env.record_assist(vid))
+                        n_fin += 1
+                    try:
+                        persons, foes = env.record_persons(), env.record_junction_foes()
+                    except traci.TraCIException:
+                        persons, foes = [], []
+                    for p, child, x, y, v, place in persons:
+                        cc = fper.cols
+                        cc["per_name"].append(names(p)); cc["per_child"].append(child); cc["per_x"].append(to_cm(x))
+                        cc["per_y"].append(to_cm(y)); cc["per_speed"].append(to_cm(v)); cc["per_place"].append(places(place))
+                    for f, my_d, f_d, i_yield in foes:
+                        cc = ffoe.cols
+                        cc["foe_name"].append(names(f)); cc["foe_my_dist"].append(to_cm(my_d))
+                        cc["foe_dist"].append(to_cm(f_d)); cc["foe_i_yield"].append(i_yield)
+                else:
+                    for k in ("fin_ego_x", "fin_ego_y", "fin_ego_speed", "fin_ego_lane", "fin_ego_lane_pos"):
+                        FS[k].append(0)
+                    FS["fin_ego_lane_code"].append(-1)
+                fveh.close_step(); fper.close_step(); ffoe.close_step()
+                if check:                            # 수업 방식의 next_state 와 견준다
+                    ref = env.get_privileged_state_daehakro()
+                    if bool(ref.get("ego_alive")) != alive:
+                        raise RuntimeError("판이 끝난 뒤 AV 가 남아 있는지가 수업 방식과 다릅니다")
+                    if alive and radius <= 0 and len(ref.get("vehicles", [])) != n_fin:
+                        raise RuntimeError(f"판이 끝난 뒤의 차 수가 다릅니다: 수업 방식 {len(ref.get('vehicles', []))}, 구독 {n_fin}")
             n = len(S["t"])
             data = {k: np.asarray(v, STEP[k]) for k, v in S.items()}
             data["observation"] = np.asarray(obs_buf, np.float32).reshape(n, obs_dim)
@@ -271,13 +331,20 @@ def worker(a):
                 for k, dt in spec.items():
                     data[k] = np.asarray(flat.cols[k], dt)
             data["ep_id"] = np.asarray(ep_id, np.int64); data["ep_steps"] = np.asarray(ep_steps, np.int32)
+            for k, dt in FIN.items():
+                data[k] = np.asarray(FS[k], dt)
+            data["fin_tls"] = np.asarray(fin_tls, np.int8)
+            for flat, spec, key in ((fveh, VEH, "fin_veh_off"), (fper, PER, "fin_per_off"), (ffoe, FOE, "fin_foe_off")):
+                data[key] = np.asarray(flat.off, np.int64)
+                for k, dt in spec.items():
+                    data["fin_" + k] = np.asarray(flat.cols[k], dt)
             data["final_observation"] = np.asarray(final_obs, np.float32).reshape(len(final_obs), obs_dim)
             for k, tb in (("names", names), ("lanes", lanes), ("types", types), ("places", places)):
                 data[k] = np.asarray(tb.items if tb.items else [""], dtype=str)
             data["meta"] = np.asarray(json.dumps({
                 "model": os.path.relpath(model, BASE) if os.path.isabs(model) else model, "policy": kind, "machine": machine,
                 "worker": wid, "chunk": c, "seed": seed, "episodes": episodes, "radius": radius,
-                "occlusion": bool(getattr(env, "occlusion", True)), "obs_dim": obs_dim,
+                "occlusion": bool(getattr(env, "occlusion", True)), "obs_dim": obs_dim, "format": 2,
                 "length_unit": "cm", "speed_unit": "cm/s", "created": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False))
             tmp = path + ".tmp.npz"
             np.savez_compressed(tmp, **data)
