@@ -23,8 +23,8 @@ BC → PPO 로 학습한 자율주행 정책이다. 이 저장소에는 최종 �
 합계 10,500,000 스텝. 속도에 맞춰 나눴기 때문에 세 대가 거의 같은 시각(약 7시간 뒤)에 끝난다.
 
 ```bash
-git clone -b final https://github.com/junyeounyang/17team_FINAL.git 17team_final
-cd 17team_final
+git clone -b final https://github.com/junyeounyang/17team_FINAL.git 17team_submit
+cd 17team_submit
 conda activate sumo-rl                       # SUMO 와 torch 가 있는 환경
 
 python collect_fast.py --machine 2 --test    # 1) 시험 (2~3분). 끝에 "시험 결과" 줄이 나오면 정상
