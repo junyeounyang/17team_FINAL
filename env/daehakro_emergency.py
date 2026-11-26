@@ -99,7 +99,7 @@ class EmergencyAssist:
         self.bus_asked = {}       # 버스 → 마지막으로 끼워 달라고 한 시각
         self.bus_since = {}       # 버스 → 끼워 달라고 하기 시작한 시각 (40초 넘으면 20초 쉼)
         self.bus_hold = {}        # 버스를 들여보내려고 정지선에 선 차 → (차로, 풀어 줄 시각)
-        self.bus_slowed = set()   # 기록용 (2026-11-21): 이번 스텝에 버스 끼워 주기로 세운 옆 차로 뒤차. 보조 동작에는 쓰지 않는다
+        self.bus_slowed = set()   # 기록용 : 이번 스텝에 버스 끼워 주기로 세운 옆 차로 뒤차. 보조 동작에는 쓰지 않는다
         self.siren_types = set(siren_types or [f"{k}_siren" for k in cfg.EMERGENCY_TYPES])
         self.make_way_dist = a["make_way_dist"]
         self.return_after = a["return_after"]

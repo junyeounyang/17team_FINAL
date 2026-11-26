@@ -27,7 +27,7 @@ BC 학습에는 관측·행동·에피소드 번호만 있으면 되므로 여�
     python test.py results/bc_월일_시분/model.pt --episodes 100 --nogui
 
 출력 data/<name>.npz  (train_bc.py 가 읽는 형식)
-    observation (N, 51)   행동을 정할 때의 관측
+    observation (N, 50)   행동을 정할 때의 관측
     action_raw  (N, 2)    정답 행동 [가감속, 차로변경]. 차로변경은 +1 (왼쪽으로) / 0 (유지) / −1 (오른쪽으로)
     episode     (N,)      에피소드 번호
     t, reward, terminated, truncated   참고용

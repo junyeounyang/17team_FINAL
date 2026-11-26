@@ -110,7 +110,7 @@ sys.path.insert(0, BASE)
 FULL = {                              # 최종 벌점 (env/daehakro_env.py REWARD 와 같은 값)
     "crash_penalty": 20.0, "crash_pedestrian_penalty": 40.0,
     "red_light_penalty": 15.0, "crosswalk_penalty": 10.0, "yield_penalty": 8.0,
-    "solid_line_penalty": 3.0,        # 2026-11-24: 실선 침범 (환경이 막지 않고 감점한다)
+    "solid_line_penalty": 3.0,        # 실선 침범 (환경이 막지 않고 감점한다)
     "off_route_penalty": 20.0,        # v5: 10 → 20 (충돌과 같게). 남은 실패의 가장 큰 몫이 로터리 경로 이탈이다
 }
 # v5: '필요한 만큼 밟지 않음' 감점 (보상 모양 잡기. 관측 [46] [47] 만 쓴다 — 정책이 보는 값과 같다)
@@ -121,7 +121,7 @@ FULL = {                              # 최종 벌점 (env/daehakro_env.py REWAR
 #   차로변경이 거절된 경우였고, 충돌 대부분은 서 있거나 느린 앞차에 늦게 브레이크를 밟은 추돌이었다.
 BRAKE_SHAPING = 0.0                    # v5b: 끔 (v5 에서 0.3 — 충돌·보행자 충돌이 늘어서 되돌림)
 NEED_LO, NEED_HI = 0.3, 0.95
-I_STOP_NEED, I_CLOSE_NEED = 46, 47     # 관측에서의 위치 (env/daehakro_env.py 맨 위 관측 표. 2026-11-24 관측 51차원 기준)
+I_STOP_NEED, I_CLOSE_NEED = 46, 47     # 관측에서의 위치 (env/daehakro_env.py 맨 위 관측 표. 관측 51차원 기준)
 
 
 def brake_shortfall(prev_obs, accel_cmd):
@@ -248,7 +248,7 @@ def crosswalk_stop_penalty(env):
 
 CRASH_KEYS = ("crash_penalty", "crash_pedestrian_penalty", "off_route_penalty")   # 2단계에서 올림 (에피소드가 끝나는 실패)
 RULE_KEYS = ("red_light_penalty", "crosswalk_penalty", "yield_penalty", "solid_line_penalty")   # 3단계에서 올림
-# 2026-11-24 에 환경에 생긴 스텝당 감점 — 과속(speeding_penalty 0.3)·버스전용차로(bus_lane_penalty 0.3) — 은 환경 기본값을
+# 에 환경에 생긴 스텝당 감점 — 과속(speeding_penalty 0.3)·버스전용차로(bus_lane_penalty 0.3) — 은 환경 기본값을
 # 처음부터 그대로 쓴다 (ALWAYS 에 적으면 값을 바꿀 수 있다). 환경이 속도·버스전용차로를 더는 막아 주지 않으므로,
 # 이 감점이 없으면 보호구역에서 50 km/h 로 달리고 버스전용차로를 지름길로 쓰는 것을 배운다.
 ALWAYS = {                            # 처음부터 끝까지 그대로 (기본값과 다른 것만)

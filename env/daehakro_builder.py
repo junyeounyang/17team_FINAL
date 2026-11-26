@@ -68,7 +68,7 @@ BAY = "bay"        # 버스 베이·정류장 공간 (버스가 서는 자리. �
 DASH = "dash"      # 버스전용 점선 구간 (승용차 잠시 진입 허용)
 # v4: 버스전용차로는 사이렌을 켠 긴급차량(vClass emergency)도 달릴 수 있음.
 #     사이렌을 끈 소방차(truck)·구급차(passenger)는 일반 차와 같은 규칙.
-# 2026-11-24: AV 는 차종 AV_CLASS (custom1) 로 달린다. 버스전용차로·베이에도 '들어갈 수는' 있게 허용 목록에 넣는다.
+# AV 는 차종 AV_CLASS (custom1) 로 달린다. 버스전용차로·베이에도 '들어갈 수는' 있게 허용 목록에 넣는다.
 #     SUMO 가 막지 않을 뿐이다. 들어가면 안 되는 곳인지는 환경(daehakro_env.py)이 감점·위반으로 따진다.
 #     배경 승용차(passenger)는 전과 똑같이 못 들어간다.
 #     BAY_TAG (custom2) 는 '이 차로는 베이'라는 표시다. 그 차종의 차는 없다. 환경이 버스전용차로와 베이를 구분할 때 읽는다.
@@ -261,7 +261,7 @@ class Plan:
 TLS_CORRIDOR = {"IH", "M", "O", "I", "H", "F", "E", "D", "C", "A", "RS"}
 # v3: 교차로가 아닌 곳은 한쪽 방향만 노드로 나눔 (반대쪽 차로·중앙선이 끊기지 않게)
 NB_ONLY = {"IWJ", "BAY0", "BAY1", "G", "C_s", "B", "UBAY"}     # + 버스차로 점선/실선 경계 (자동)
-SB_ONLY = {"SB3", "SB2"} | set(cfg.WEST_STREETS)     # 서쪽 옆길(2026-11-24)도 남행만 나눈다
+SB_ONLY = {"SB3", "SB2"} | set(cfg.WEST_STREETS)     # 서쪽 옆길도 남행만 나눈다
 # 동쪽 옆길 → 붙는 노드 (N은 M 교차로, C 옆길 입구는 C_s)
 SIDE_NODE = {"N": "M", "O": "O", "G": "G", "D": "D", "C": "C_s", "B": "B", "A": "A", "I": "I"}
 
@@ -474,7 +474,7 @@ def build_corridor(p: Plan):
     p.conn(I_in, sb_out("I"), 0, 0, CP)
     p.crossing("I", [I_in, I_out], True, W_side)
 
-    # ── 서쪽 옆길 (2026-11-24): 신호 없음. 남행 바깥 차로에서 우회전으로 드나든다 ──
+    # ── 서쪽 옆길 : 신호 없음. 남행 바깥 차로에서 우회전으로 드나든다 ──
     x_west = -(LW * 2 + SWM + 2.0)
     for key, mode in cfg.WEST_STREETS.items():
         end = p.node(f"{key}_end", (x_west - cfg.SIDE_STREET_LENGTH[key], S[key]))
@@ -625,7 +625,7 @@ def build_rotary(p: Plan, cor):
     #   4번째 차로 = 혜화로 오른쪽 통로에서 들어온 차. J_mg 에서 3번째 차로로 합쳐진다 (우회전 직전)
     #   베이는 교차로 바로 뒤에서 시작한다: 버스는 통로에서 곧장 베이로 들어가고, 정차 뒤 4번째 차로로 나온다.
     #   (베이에 차로변경으로 들어가게 하면, 뒤 버스가 4번째 차로에서 앞 버스 옆에 서서 나오려는 앞 버스와 서로 막는다)
-    # (2026-11-24) 4번째 차로를 없앴다 → 정류장 베이 + 3차로 (0 = 베이, 1 = 3번째(바깥), 2 = 2번째, 3 = 1번째).
+    # 4번째 차로를 없앴다 → 정류장 베이 + 3차로 (0 = 베이, 1 = 3번째(바깥), 2 = 2번째, 3 = 1번째).
     #   전에는 대학로에서 온 버스가 3번째 차로로 들어와 10 m 안에 두 번(4번째 차로 → 베이) 옮겨야 해서, 못 옮기면
     #   로터리 위에 서서 로터리 전체가 막혔다. 이제 3번째 차로가 베이 바로 옆이라 한 번만 옮기면 된다.
     #   혜화로에서 들어오는 차(통로·대기 공간)는 모두 3번째 차로로 들어가며 돌던 차에 양보한다.
@@ -731,12 +731,12 @@ def build_rotary(p: Plan, cor):
     else:
         p.conn("arcN2", "arcW1", 3, [2, 3], UNC)
     #   대기 공간 → 3번째 차로 (돌던 차에 양보: west_entry_yield), 오른쪽 통로 → 4번째 차로 / 정류장 베이 (양보 없음)
-    #   (2026-11-24) 4번째 차로가 없어져서 통로도 3번째 차로로 들어간다 (돌던 차에 양보). 버스는 통로에서 베이로도 갈 수 있다
+    #   4번째 차로가 없어져서 통로도 3번째 차로로 들어간다 (돌던 차에 양보). 버스는 통로에서 베이로도 갈 수 있다
     p.conn("NW_pk", "arcW1", 0, 1, UNC + " " + CP)
     p.conn("NW_ch", "arcW1", 0, [1, 0], UNC + " " + CP)
     # J_mg: 4번째 차로(1번) 끝이 3번째 차로(2번)와 합쳐져 남서쪽 우회전 차로가 된다 (4번째 차로가 양보).
     #   정류장 베이(0번)는 여기서 끊긴다 → 버스는 정차 뒤 차로변경으로 4번째 차로로 나온다
-    p.conn("arcW1", "arcW1b", [1, 2, 3], [0, 1, 2])           # (2026-11-24) 3차로가 그대로 이어진다
+    p.conn("arcW1", "arcW1b", [1, 2, 3], [0, 1, 2])           # 3차로가 그대로 이어진다
     # 베이에 선 버스는 앞으로 곧장 나와 바깥 차로에 합쳐진다 (차로변경으로 나오게 하면, 베이가 비기를 옆 차로에서
     #   기다리는 다음 버스와 서로 막아 로터리가 멈췄다 — 시드 2)
     p.conn("arcW1", "arcW1b", 0, 0)
@@ -1149,7 +1149,7 @@ def build_signals(net, tls, out_path, cor):
             if phase == "lead":
                 return "r"
             if phase == "pre_main" and (f == "O_in" or (f == nb_o and t == "O_out")):
-                # 2026-11-24: 본선 녹색(= O 입구 횡단보도 보행 녹색) 직전 o_pre 초는 그 횡단보도를 지나는 우회전을 모두 세운다.
+                # 본선 녹색(= O 입구 횡단보도 보행 녹색) 직전 o_pre 초는 그 횡단보도를 지나는 우회전을 모두 세운다.
                 # 그 전에는 적색 우회전 허용(s)이 끝나는 바로 다음 순간 보행 녹색이 켜져서, 일시정지 뒤 막 출발한
                 # 우회전 차가 횡단보도에 들어선 보행자와 부딪혔다 (일반 차량 10시간 시험에서 3개 seed, 6건).
                 return "r"
@@ -1179,7 +1179,7 @@ def build_signals(net, tls, out_path, cor):
     def i_state(phase):
         def rule(inf):
             if inf["kind"] == "ped":
-                return "G" if phase == "walk" else "r"   # (2026-11-24) 보행 초록은 본선 초록의 처음 I_WALK 초만
+                return "G" if phase == "walk" else "r"   # 보행 초록은 본선 초록의 처음 I_WALK 초만
             f, t = inf["frm"], inf["to"]
             if f == "I_in":
                 return "G" if phase == "side" else "r"   # 옆길 녹색 때만 (I 입구 보행자는 그때 적색)
@@ -1352,7 +1352,7 @@ def build_stops(net, plan, out_path, cor):
         p1 = L - 0.5 if p1 is None else min(L - 0.5, p1)
         lines.append(f'    <busStop id="{sid}" lane="{lane}" startPos="{p0:.1f}" endPos="{p1:.1f}" '
                      f'friendlyPos="true" name="{sid}"/>')
-    # 남행 정류장 (2026-11-24): 베이 없이 맨 바깥 차로
+    # 남행 정류장 : 베이 없이 맨 바깥 차로
     for sid, a, b in getattr(cfg, "SB_BUS_STOPS", ()):
         e = edge_at_y(cor, (a + b) / 2, "sb")
         lane = f"{e}_{plan.off(e)}"
@@ -1471,7 +1471,7 @@ def build_routes(net, plan: Plan, out_path, stops_edges, cor):
     jm = (f'jmStoplineCrossingGap="{cfg.PED_YIELD_GAP}" jmCrossingGap="{cfg.PED_LOOKAHEAD}" '
           f'jmTimegapMinor="{cfg.MINOR_GAP}" jmSigmaMinor="0" jmAdvance="{cfg.JUNCTION_ADVANCE}"')
     for name, v in cfg.CAR_TYPES.items():
-        attrs = [f'id="car_{name}"', f'probability="{v["probability"] / tot:.3f}"',
+        attrs = [f'id="car_{name}"', f'probability="{v["probability"] / tot * (1.0 - cfg.VAN_SHARE):.4f}"',
                  f'carFollowModel="{v["carFollowModel"]}"', f'accel="{v["accel"]}"',
                  f'decel="{v["decel"]}"', f'tau="{v["tau"]}"', f'minGap="{v["minGap"]}"',
                  f'color="{v["color"]}"', f'length="{cc["length"]}"', f'maxSpeed="{cc["maxSpeed"]}"',
@@ -1486,6 +1486,13 @@ def build_routes(net, plan: Plan, out_path, stops_edges, cor):
             if k in v:
                 attrs.append(f'{k}="{v[k]}"')
         lines.append("        <vType " + " ".join(attrs) + "/>")
+    if cfg.VAN_SHARE > 0:                            # 택배 탑차: 차고가 높아 시야를 가린다 (env/occlusion.py)
+        vt = cfg.VAN_TYPE
+        lines.append(f'        <vType id="car_van" probability="{cfg.VAN_SHARE:.4f}" carFollowModel="Krauss" '
+                     + " ".join(f'{k}="{vt[k]}"' for k in ("accel", "decel", "tau", "minGap", "sigma", "color", "length",
+                                                           "width", "height", "maxSpeed", "guiShape"))
+                     + f' speedFactor="{cc["speedFactor"]}" vClass="{cc["vClass"]}" lcStrategic="1.0" lcCooperative="1.0" '
+                       f'lcSpeedGain="0.7" lcSpeedGainRight="0.02" lcKeepRight="0" lcAssertive="1.0" {jm}/>')
     lines.append("    </vTypeDistribution>")
     bt = cfg.BUS_TYPE
     lines.append('    <vType id="bus" ' + " ".join(f'{k}="{v}"' for k, v in bt.items()) + f' {jm}/>')
