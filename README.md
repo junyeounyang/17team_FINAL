@@ -3,7 +3,7 @@
 서울 대학로(이화사거리 ~ 혜화동로터리)를 SUMO 로 만들고, 키 큰 차에 시야가 가려지는 부분 관측 환경에서
 BC → PPO 로 학습한 자율주행 정책이다. 최종 환경, 학습·평가·데이터 수집 코드, 최종 모델, 평가 결과가 들어 있다.
 
-- GitHub 저장소: https://github.com/junyeounyang/17team_FINAL (브랜치 `final`)
+- GitHub 저장소: https://github.com/junyeounyang/Team17_Final_Code
 - 데이터셋(Hugging Face)·발표 자료·영상 링크는 프로젝트 페이지에 있다.
 
 | 항목 | 값 |
