@@ -1,0 +1,8 @@
+# SUMO 1.27.1 은 따로 설치한다 (SUMO_HOME 환경변수 필요). 아래는 파이썬 패키지.
+numpy
+torch
+gymnasium
+traci
+sumolib
+matplotlib
+tensorboard

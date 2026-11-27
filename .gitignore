@@ -8,3 +8,7 @@ __pycache__/
 /logs_*/
 /STOP
 *.tmp.npz
+/occ_night*/
+/mem_pairs*/
+/siren_diag*.txt
+*.log

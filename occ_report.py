@@ -18,7 +18,12 @@
     python occ_report.py results/ppo_van_on/last.pt --hide ped           # 횡단보도 보행자를 내내 가린다 ([36]=0)
     python occ_report.py results/ppo_van_on/last.pt --hide cross         # 겹치는 차를 내내 가린다 ([37..42] 없음)
     python occ_report.py results/ppo_van_on/last.pt --hide siren         # 사이렌 차의 차로를 내내 가린다 ([44]=0, [49]=1)
+    python occ_report.py results/ppo_van_on/last.pt --hide lane          # 두 칸 옆 차로(±2)의 차를 내내 가린다 ([9..20] 중 ±2, 밀도)
     python occ_report.py results/ppo_van_on/last.pt --hide signal,ped    # 여러 개 함께
+    python occ_report.py results/ppo_van_on/last.pt --hide all           # 다섯 가지 모두
+  모델 자리에 expert 를 쓰면 시범 운전자가 운전한다 (기준). 시범 운전자는 SUMO 가 신호·보행자·겹치는 차를 실제 상황으로
+  보고 속도를 정하므로 signal·ped·cross·lane 을 가려도 달라지지 않는다. 달라지는 것은 siren 뿐이다.
+  --out-dir 를 주면 결과를 그 폴더에 <운전자>_<가린 것>.txt / .json 으로 쓴다.
   관측만 가린다. 위반 판정은 실제 상황으로 한다. 결과는 occ_report_hide_<이름>.txt 에 쓴다.
 """
 import argparse
@@ -73,9 +78,22 @@ def force_hide(env_class, hide):
             if "cross" in hide:
                 s["cross"] = []
             if "siren" in hide and s.get("siren"):
-                s["siren"] = (s["siren"][0], s["siren"][1], True)
+                s["siren"] = (s["siren"][0], s["siren"][1], True, False, True)   # 안 보이고, 기억도 없다
         return s
     env_class._look = forced
+    if "lane" in hide:                       # 두 칸 옆 차로(±2): 차 없음, 밀도 0 (없는 차로·보도는 원래 값 그대로)
+        neighbor, density = env_class._neighbor, env_class._lane_density
+
+        def far_neighbor(self, offset, leader):
+            return None if abs(offset) >= 2 else neighbor(self, offset, leader)
+
+        def far_density(self, offset):
+            if abs(offset) >= 2:
+                lane = self._offset_lane(offset)
+                if lane is not None and self.map.av_ok.get(lane, False):
+                    return 0.0
+            return density(self, offset)
+        env_class._neighbor, env_class._lane_density = far_neighbor, far_density
 
 
 def job(args):
@@ -91,11 +109,13 @@ def job(args):
     from env.daehakro_env import DaehakroEnv
     if hide:
         force_hide(DaehakroEnv, hide)
-    env = DaehakroEnv(daehakro_env.build(), None, None, SIMULATION, OBSERVATION, ACTION, REWARD)
+    expert = model == "expert"
+    env = DaehakroEnv(daehakro_env.build(), None, None, SIMULATION, OBSERVATION, ACTION, REWARD, demo=expert)
+    env.demo_noise = 0.0
     c = collections.Counter()
     sir_wait = {"seen": [], "hidden": []}
     try:
-        agent = load_policy(model, env.observation_space.shape[0], env.action_space.shape[0])
+        agent = None if expert else load_policy(model, env.observation_space.shape[0], env.action_space.shape[0])
         np.random.seed(seed)                     # eval_daehakro.evaluate 와 같은 방법
         for _ in range(episodes):
             obs, _ = env.reset()
@@ -130,7 +150,7 @@ def job(args):
                     sir_wait["hidden" if sir_run[1] else "seen"].append(sir_run[0])
                     sir_run = None
 
-                obs, _, term, trunc, info = env.step(agent.predict(obs, deterministic=True))
+                obs, _, term, trunc, info = env.step([0.0, 0.0] if expert else agent.predict(obs, deterministic=True))
                 done = term or trunc
                 flags.append({"red": bool(info.get("red_light")), "cw": bool(info.get("crosswalk_violation")),
                               "yield": bool(info.get("yield_violation"))})
@@ -214,19 +234,23 @@ def main():
     p.add_argument("--episodes", type=int, default=300)
     p.add_argument("--procs", type=int, default=8)
     p.add_argument("--seed", type=int, default=3000, help="평가 seed 의 시작 번호 (학습·다른 평가와 겹치지 않는 번호)")
-    p.add_argument("--hide", default="", help="내내 가릴 정보 (쉼표로 여러 개): signal, ped, cross, siren")
+    p.add_argument("--hide", default="", help="내내 가릴 정보 (쉼표로 여러 개): signal, ped, cross, lane, siren, all")
+    p.add_argument("--out-dir", default=None, help="결과를 쓸 폴더 (주지 않으면 모델 폴더)")
     a = p.parse_args()
+    KINDS = ("signal", "ped", "cross", "lane", "siren")
     hide = tuple(x for x in a.hide.replace(" ", "").split(",") if x)
-    bad = [x for x in hide if x not in ("signal", "ped", "cross", "siren")]
+    if "all" in hide:
+        hide = KINDS
+    bad = [x for x in hide if x not in KINDS]
     if bad:
-        sys.exit(f"--hide 에 쓸 수 있는 것은 signal, ped, cross, siren 입니다: {bad}")
+        sys.exit(f"--hide 에 쓸 수 있는 것은 {', '.join(KINDS)}, all 입니다: {bad}")
     from env import occlusion
     print(f"가림: {'켬' if occlusion.ENABLED else '끔 (DAEHAKRO_OCCLUSION=0)'}"
           + (f" | 내내 가리는 정보: {', '.join(hide)}" if hide else ""), flush=True)
     procs = max(1, min(a.procs, a.episodes))
     share = [a.episodes // procs + (1 if i < a.episodes % procs else 0) for i in range(procs)]
     for model in a.models:
-        path = model if os.path.isabs(model) else os.path.join(BASE, model)
+        path = model if model == "expert" or os.path.isabs(model) else os.path.join(BASE, model)
         jobs = [(path, a.seed + i, n, hide) for i, n in enumerate(share) if n > 0]
         print(f"{model}: {a.episodes}판을 SUMO {len(jobs)}개로 돌립니다 (끝날 때까지 조용합니다)", flush=True)
         results = []
@@ -244,9 +268,17 @@ def main():
             text = (f"※ 내내 가린 정보: {', '.join(hide)}  (이 정보에 대해서는 모든 장면이 '가려져 있던 장면'이다)\n" + text)
         print("\n" + text, flush=True)
         tag = "occ_report" + ("_hide_" + "_".join(hide) if hide else "")
-        with open(os.path.join(os.path.dirname(path), tag + ".txt"), "a", encoding="utf-8") as f:
+        folder = BASE if model == "expert" else os.path.dirname(path)
+        if a.out_dir:
+            folder = a.out_dir if os.path.isabs(a.out_dir) else os.path.join(BASE, a.out_dir)
+            os.makedirs(folder, exist_ok=True)
+            who = "expert" if model == "expert" else os.path.basename(os.path.dirname(path)) + "_" + os.path.splitext(os.path.basename(path))[0]
+            tag = who + "_" + ("all" if len(hide) == len(KINDS) else "_".join(hide) if hide else "none")
+        elif model == "expert":
+            tag += "_expert"
+        with open(os.path.join(folder, tag + ".txt"), "a", encoding="utf-8") as f:
             f.write(text + "\n\n")
-        with open(os.path.join(os.path.dirname(path), tag + ".json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(folder, tag + ".json"), "w", encoding="utf-8") as f:
             json.dump({"model": model, "counts": dict(c), "siren_block_steps": sir}, f, ensure_ascii=False, indent=1)
 
 

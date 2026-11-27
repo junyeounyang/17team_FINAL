@@ -91,6 +91,34 @@ def job(args):
                         rem_room = env._yield_lane(dict(s, siren=(min(sir[0], 99.0), True, False))) != 0
                     except Exception:
                         rem_room = False
+                # 긴급차가 잃은 시간: AV 가 사이렌 차의 차로 앞을 막고 있는 스텝에서, 그 차가 낼 수 있는 속도보다 느린 만큼
+                # (SUMO 의 timeLoss 와 같은 셈: (1 − 속도/낼 수 있는 속도) × 0.5초). 보이던 때 / 가려져 있던 때 / 기억이 겨냥한 때로 나눈다.
+                if sir and sir[1]:
+                    try:
+                        tr = daehakro_env.traci
+                        live = set(tr.vehicle.getIDList())
+                        for ev in list(getattr(env.assist, "evs", None) or ()):
+                            if ev not in live or env.ego_id not in env.assist._leaders(ev):
+                                continue
+                            v_ev, v_ok = tr.vehicle.getSpeed(ev), max(tr.vehicle.getAllowedSpeed(ev), 0.1)
+                            loss = max(0.0, 1.0 - v_ev / v_ok) * 0.5
+                            ld = tr.vehicle.getLeader(ev, 100.0)
+                            keys = ["hid" if sir[2] else "seen"]
+                            if ld and ld[0] == env.ego_id:
+                                keys.append("direct")
+                            if room:
+                                keys.append("room_hid" if sir[2] else "room_seen")
+                            if rem == "rem_mine":
+                                keys.append("rem")
+                                if rem_room:
+                                    keys.append("rem_room")
+                            for k in keys:
+                                c["evn_" + k] += 1
+                                c["evl_" + k] += loss
+                                c["evv_" + k] += v_ev
+                            break
+                    except Exception:
+                        c["ev_read_errors"] += 1
                 lane0 = s.get("lane")
                 act = [0.0, 0.0] if expert else agent.predict(obs, deterministic=True)
                 obs, _, term, trunc, info = env.step(act)
@@ -173,6 +201,13 @@ def describe(model, c, runs):
     out.append(f"   ▶ 5초 안에 비킨 비율           {quick}/{len(roomy)}" + (f" ({quick / len(roomy):.0%})" if roomy else ""))
     out.append(f"   ▶ 괜히 옮긴 횟수               100판당 {(c['moved_other_seen'] + c['moved_other_hid']) / n * 100:6.1f}번")
     out.append(f"   ▶ 사이렌 차 앞을 막은 시간 전체 100판당 {(c['steps_mine_seen'] + c['steps_mine_hid']) * 0.5 / n * 100:6.1f}초")
+    out.append("   ▶ 긴급차가 잃은 시간 (AV 가 그 차의 차로 앞을 막고 있던 스텝. 100판당 초 | 그 상태였던 시간 | 그때 긴급차 평균 속도)")
+    for k, name in (("seen", "긴급차가 보이던 때"), ("hid", "긴급차가 가려져 있던 때"),
+                    ("room_seen", "   보이던 때 중 비킬 차로가 있던 때"), ("room_hid", "   가려져 있던 때 중 비킬 차로가 있던 때"),
+                    ("rem", "기억이 겨냥한 때 (가려진 뒤 10초, '내 차로 뒤'였던 차)"), ("rem_room", "   그중 비킬 차로가 있던 때"),
+                    ("direct", "(참고) AV 가 바로 앞차였던 때")):
+        m = c["evn_" + k]
+        out.append(f"      {name:<34s} {c['evl_' + k] / n * 100:7.1f}초 | {m * 0.5 / n * 100:7.1f}초 | {(c['evv_' + k] / m * 3.6 if m else 0):4.1f} km/h")
     heard = sum(c["steps_" + k] for k in ("other_seen", "other_hid", "mine_seen", "mine_hid"))
     if c["mem_steps"]:
         out.append(f"   ▶ 기억이 쓰인 스텝              {c['mem_steps']:,} (사이렌이 들리는 스텝의 {c['mem_steps'] / max(heard, 1):.1%}) | "

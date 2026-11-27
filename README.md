@@ -1,50 +1,72 @@
-# 17조 대학로 자율주행 — 최종 환경과 모델 (track)
+# 17조 대학로 자율주행 — 최종 코드 (track)
 
 서울 대학로(이화사거리 ~ 혜화동로터리)를 SUMO 로 만들고, 키 큰 차에 시야가 가려지는 부분 관측 환경에서
-BC → PPO 로 학습한 자율주행 정책이다. 이 저장소에는 최종 환경, 학습·평가·수집 코드, 최종 모델, 평가 결과가 들어 있다.
+BC → PPO 로 학습한 자율주행 정책이다. 최종 환경, 학습·평가·데이터 수집 코드, 최종 모델, 평가 결과가 들어 있다.
+
+- GitHub 저장소: https://github.com/junyeounyang/17team_FINAL (브랜치 `final`)
+- 데이터셋(Hugging Face)·발표 자료·영상 링크는 프로젝트 페이지에 있다.
 
 | 항목 | 값 |
 |---|---|
 | 관측 / 행동 | 50칸 / 2칸 (가감속, 차로변경) |
 | 최종 모델 | `models/ppo_track.pt` (PPO). 출발점인 BC 는 `models/bc_track.pt` |
 | 최종 평가 (seed 110~150, 각 300판 = 1,500판) | 도착 98.9%, 충돌 0.9% (95% 신뢰구간 0.6~1.6%), 위반 없이 도착 87.1% |
-| SUMO | 1.27.1 |
 
-## 1. 데이터 수집 (지금 할 일)
+## 1. 실행 환경
 
-세 대가 서로 다른 주행을 모은다. **기기 번호만 다르게** 주면 된다. 맥과 윈도우에서 명령이 같다.
-
-| 기기 | 번호 | 모을 양 | 시험 속도 |
-|---|---|---|---|
-| 윈도우 (가장 빠른 기기) | 1 | 4,800,000 스텝 | 194 스텝/s |
-| 맥북 | 2 | 3,300,000 스텝 | 133 스텝/s |
-| 윈도우 | 3 | 2,400,000 스텝 | 98 스텝/s |
-
-합계 10,500,000 스텝. 속도에 맞춰 나눴기 때문에 세 대가 거의 같은 시각(약 7시간 뒤)에 끝난다.
+| 항목 | 값 |
+|---|---|
+| 운영체제 | macOS (Apple Silicon), Windows 에서 실행했다 |
+| Python | 3.10 이상 (3.12 에서 실행했다) |
+| SUMO | 1.27.1 (`SUMO_HOME` 환경변수 필요. 버전이 다르면 교통 흐름이 달라진다) |
+| 파이썬 패키지 | numpy, torch, gymnasium, traci, sumolib, matplotlib, tensorboard (`requirements.txt`) |
+| GPU | 필요 없다 (CPU 로 학습·평가한다) |
 
 ```bash
-git clone -b final https://github.com/junyeounyang/17team_FINAL.git 17team_submit
-cd 17team_submit
-conda activate sumo-rl                       # SUMO 와 torch 가 있는 환경
-
-python collect_fast.py --machine 1 --test    # 1) 시험 (2~3분). 끝에 "시험 결과" 줄이 나오면 정상. 번호는 자기 기기 것으로
-python collect_fast.py --machine 1           # 2) 본 수집. 몫을 다 모으면 스스로 끝난다
-python collect_fast.py --status              # 모은 양 확인 (다른 창에서)
+conda create -n sumo-rl python=3.12 -y
+conda activate sumo-rl
+pip install -r requirements.txt
+python check_setup.py            # 환경 파일·SUMO 버전·패키지 확인. "모두 OK" 가 나와야 한다
 ```
 
-- 번호는 위 표대로 준다. 번호가 같으면 같은 주행이 두 번 저장된다.
+SUMO 설치는 수업 자료(1_SUMO_Windows_Setup, 1_SUMO_macOS_AppleSilicon_Setup)와 같다.
+
+## 2. 실행 방법
+
+모든 명령은 이 폴더에서 실행한다. 맥과 윈도우에서 명령이 같다.
+
+### 최종 모델 평가
+
+```bash
+python eval_daehakro.py models/ppo_track.pt --episodes 30 --gui     # 눈으로 보기
+python eval_daehakro.py models/ppo_track.pt --episodes 100 --seed 110
+python final_eval.py models/ppo_track.pt                            # 팀의 최종 평가: seed 110~150, 각 300판 (약 90분)
+```
+
+### 학습 (처음부터 다시)
+
+```bash
+bash run_train.sh        # 시범 2,000판 → BC 3개 + 평가 → PPO 60만 스텝 → 300판 집계 → 사이렌 진단 (약 4시간 반)
+```
+
+윈도우에서는 `run_train.sh` 안의 명령을 차례로 직접 실행한다. 단계는 4장에 있다.
+
+### 데이터 수집
+
+```bash
+python collect_fast.py --machine 1 --test                  # 시험 (2~3분). 끝에 "시험 결과" 줄이 나오면 정상
+python collect_fast.py --machine 1 --target 10500000       # 본 수집. 목표 스텝을 채우면 스스로 끝난다
+python collect_fast.py --status                            # 모은 양 확인
+```
+
 - 결과는 `data_final/final_m<기기>_w<워커>_c<묶음>.npz` 로 쌓인다. 판 20개마다 파일 하나.
-- 끊겨도 된다. 같은 명령을 다시 실행하면 끝난 묶음은 건너뛰고 이어서 모은다.
-- 멈추기: `Ctrl+C`. 지금 묶음까지만 하고 멈추려면 이 폴더에 `STOP` 이라는 빈 파일을 만든다.
-- 노트북 덮개를 닫지 않는다 (닫으면 잠든다). 전원을 연결한다. 맥은 명령 앞에 `caffeinate -i` 를 붙인다.
-- 디스크는 기기당 10 GB 이상 비워 둔다 (스텝당 약 1.85 KB. 여유가 5 GB 아래면 스스로 멈춘다).
-- 한 대가 못 채우면 다른 기기에서 `--target <스텝 수>` 로 몫을 늘려 다시 실행한다.
+- 끊겨도 같은 명령을 다시 실행하면 끝난 묶음은 건너뛰고 이어서 모은다.
+- `--machine` 번호가 seed 와 판 번호를 정한다. 여러 대로 나눠 모을 때는 번호만 다르게 준다 (번호가 같으면 같은 주행이 된다).
+- 수업 형식(JSONL)으로 모으려면 `collect_pomdp_data_daehakro.py` 를 쓴다.
 
-수집이 끝나면 `data_final/` 폴더를 통째로 한 곳에 모은다 (파일 이름이 기기마다 달라 겹치지 않는다).
+#### 저장 형식
 
-### 저장 형식
-
-`collect_fast.py` 맨 위에 배열 목록이 있다. 요약하면 한 줄이 한 스텝이고 다음이 들어 있다.
+`collect_fast.py` 맨 위에 배열 목록이 있다. 한 줄이 한 스텝이고 다음이 들어 있다.
 
 | 묶음 | 내용 |
 |---|---|
@@ -56,10 +78,22 @@ python collect_fast.py --status              # 모은 양 확인 (다른 창에�
 | 판이 끝난 뒤 | 마지막 관측(next_observation)과 그때의 도로 상태(next_state). 수업 수집기처럼 마지막 스텝 것만 저장한다 |
 
 문자열(차량·차로·차종 이름)은 번호로 저장하고 번호표를 파일에 같이 넣는다. 길이는 cm, 속도는 cm/s 정수다.
-수업 수집기(`collect_pomdp_data_daehakro.py`)와 내용이 같고, 값이 같은지는 `--check` 로 확인한다 (시험 모드는 늘 확인한다).
+수업 수집기와 내용이 같고, 값이 같은지는 `--check` 로 확인한다 (시험 모드는 늘 확인한다).
 수업 수집기보다 3배 빠르고 파일은 4분의 1 크기다 (맥북 기준 43 → 133 스텝/s, 7.7 → 1.85 KB/스텝).
 
-## 2. 환경
+### 분석 (5장의 표를 다시 만드는 명령)
+
+```bash
+python occ_report.py models/bc_track.pt models/ppo_track.pt --episodes 300      # 가림 장면 집계
+bash run_occ_night.sh                                    # 정보를 하나씩 내내 가린 평가 (PPO·BC 7개 조건 + 시범 운전자) + 사이렌 진단 1,500판
+bash run_occ_extra.sh                                    # 가림을 끈 도로 (DAEHAKRO_OCCLUSION=0)
+python siren_diag.py oracle expert models/ppo_track.pt --seeds 110 120 130 140 150 --episodes 300
+bash run_mem_pairs.sh                                    # 같은 모델로 기억 켬·끔 비교 (300판 × 5쌍)
+```
+
+`siren_diag.py` 의 `oracle` 은 가려져 있어도 사이렌 차의 실제 차로를 아는 운전자, `expert` 는 AV 와 같은 관측으로만 비키는 시범 운전자다.
+
+## 3. 환경
 
 도로와 교통은 v3 그대로다. 그 위에 가림과 택배 탑차를 더했다.
 
@@ -114,7 +148,7 @@ AV 의 눈높이는 1.5 m. 키 큰 차 뒤에 있는 것은 관측에서 빠진�
 - 차선변경 안전 검사는 수업 원본 설정 그대로다. 제한속도에서 가속을 자르지 않는다 (과속은 감점).
 - 시범 운전자(SUMO + 양보 규칙)는 BC 의 교사로만 쓴다.
 
-## 3. 학습
+## 4. 학습
 
 ```bash
 bash run_train.sh        # 시범 2,000판 → BC 3개 + 평가 → PPO 60만 스텝 → 300판 집계 → 사이렌 진단
@@ -128,18 +162,6 @@ bash run_train.sh        # 시범 2,000판 → BC 3개 + 평가 → PPO 60만 �
 
 윈도우에서는 `run_train.sh` 안의 명령을 차례로 직접 실행한다.
 
-## 4. 평가
-
-```bash
-python final_eval.py models/ppo_track.pt                 # 팀의 최종 평가: seed 110~150, 각 300판
-python occ_report.py models/bc_track.pt models/ppo_track.pt --episodes 300      # 가림 장면 집계
-python siren_diag.py oracle expert models/ppo_track.pt --episodes 150           # 사이렌 차 양보 진단
-python siren_diag.py models/ppo_track.pt --no-memory --episodes 150             # 같은 모델, 기억만 끔
-python eval_daehakro.py models/ppo_track.pt --episodes 30 --gui                 # 눈으로 보기
-```
-
-`siren_diag.py` 의 `oracle` 은 가려져 있어도 사이렌 차의 실제 차로를 아는 운전자, `expert` 는 AV 와 같은 관측으로만 비키는 시범 운전자다.
-
 ## 5. 결과 (`reports/`)
 
 ### 최종 평가 1,500판 — `reports/final_eval_1500.txt`
@@ -151,6 +173,69 @@ python eval_daehakro.py models/ppo_track.pt --episodes 30 --gui                 
 | 위반 없이 도착 | 1,306판 (87.1%) | 85.3 ~ 88.7% |
 | 위반 건수 | 신호 107, 횡단보도 60, 양보 32, 버스전용차로 0, 실선 0 | |
 
+### 정보를 하나씩 내내 가렸을 때, 같은 300판 — `reports/occlusion_hide_300/`
+
+관측에서만 가린다. 위반·충돌 판정은 실제 상황으로 한다. 각 칸은 PPO / BC.
+
+| 가린 것 | 도착 | 보행자 충돌 | 차 충돌 | 신호 위반 | 횡단보도 위반 | 양보 위반 | 사이렌 차를 비켜 줄 때까지 (평균) |
+|---|---|---|---|---|---|---|---|
+| 없음 | 297 / 291 | 0 / 0 | 3 / 9 | 9% / 17% | 6% / 8% | 4 / 8 | 13.7초 / 15.4초 |
+| 신호 색 | 285 / 282 | 7 / 7 | 4 / 6 | 55% / 53% | 12% / 13% | 9 / 19 | 15.6 / 15.6 |
+| 횡단보도 보행자 | 247 / 242 | 52 / 53 | 1 / 1 | 8% / 10% | 69% / 73% | 4 / 3 | 15.6 / 16.7 |
+| 겹치는 차 | 289 / 288 | 0 / 2 | 8 / 9 | 15% / 15% | 8% / 6% | 47 / 43 | 12.8 / 14.3 |
+| 옆옆 차로의 차 | 297 / 295 | 1 / 1 | 2 / 4 | 13% / 14% | 5% / 5% | 2 / 13 | 15.9 / 14.1 |
+| 사이렌 차의 차로 | 296 / 291 | 0 / 0 | 3 / 7 | 10% / 20% | 6% / 5% | 4 / 4 | 20.6 / 19.7 |
+| 모두 | 239 / 229 | 43 / 49 | 11 / 20 | 48% / 52% | 72% / 76% | 45 / 34 | 21.8 / 19.7 |
+
+- 가린 정보에 해당하는 지표만 나빠진다. 정책이 각 정보를 실제로 보고 운전한다.
+- 가려지면 PPO 와 BC 가 같은 정도로 나빠진다. PPO 학습은 평소 성능을 올렸고(차 충돌 9 → 3, 신호 위반 17% → 9%), 가려진 장면의 대처는 달라지지 않았다.
+- 옆옆 차로의 가림은 주행에 영향이 없었다.
+
+### 가림을 끈 도로와 평소, 같은 300판 (PPO) — `reports/occlusion_off_300/`
+
+| | 가림 끔 | 평소 | 사이렌 차의 차로를 내내 가림 |
+|---|---|---|---|
+| 도착 | 297 | 297 | 296 |
+| 차 충돌 | 2 | 3 | 3 |
+| 사이렌 차를 비켜 줄 때까지 (평균) | 13.2초 | 13.7초 | 20.6초 |
+| 10초 넘게 막은 비율 | 44% | 44% | 61% |
+
+평소에 생기는 가림(전체 스텝의 7~8%)은 주행 성능을 떨어뜨리지 않았다.
+
+### 사이렌 차 양보 1,500판 (seed 110~150) — `reports/siren_oracle_expert_ppo_1500.txt`
+
+| 지표 | 다 아는 운전자 | 같은 정보의 시범 운전자 | PPO |
+|---|---|---|---|
+| 비킬 차로가 생긴 뒤 5초 안에 비킨 비율 | 102/243 (42%) | 63/269 (23%) | 52/250 (21%) |
+| 비킬 수 있었는데 막은 시간 (100판당) | 139초 | 212초 | 181초 |
+| 사이렌 차 앞을 막은 시간 전체 (100판당) | 773초 | 900초 | 849초 |
+| 괜히 차로를 옮긴 횟수 (100판당) | 2.9번 | 3.3번 | 2.3번 |
+
+- 사이렌 차의 차로를 늘 알면 빠른 양보가 두 배다 (42% 대 21~23%). 이것이 가림과 시야 제한으로 잃는 것이다.
+- PPO 는 같은 정보의 시범 운전자와 같은 수준으로 비키고, 막은 시간과 괜한 차로변경은 조금 적다.
+- 사이렌 차 앞을 막는 구간의 약 70% 는 비킬 차로가 없다.
+
+(150판으로 한 앞선 진단은 `reports/siren_oracle_150.txt`, `reports/siren_expert_bc_ppo_150.txt`.)
+
+### 기억(10초)의 효과, 같은 PPO 모델 — `reports/memory_pairs_1500/`, `reports/siren_memory_*.txt`
+
+기억이 겨냥한 순간: 보이던 사이렌 차가 가려진 뒤 10초, '내 차로 뒤'였던 차 (300판 × 5쌍 = 각 1,500판. 기억을 꺼도 같은 기준으로 센다).
+
+| | 기억 켬 | 기억 끔 |
+|---|---|---|
+| 그 구간에서 스스로 차로를 바꿔 비킨 것 | 35/158 (22%) | 13/165 (8%) |
+| 그중 비킬 차로가 있던 구간 | 17/22 (77%) | 0/27 (0%) |
+| 비킬 차로가 있던 스텝에서 차로변경 명령을 낸 비율 | 103/105 (98%) | 0/172 (0%) |
+
+전체 지표 (앞선 5쌍 1,200판 + 위 5쌍 1,500판 = 각 2,700판):
+
+| | 기억 켬 | 기억 끔 |
+|---|---|---|
+| 비킬 수 있었는데 막은 시간 (100판당) | 200초 | 207초 |
+| 10쌍 가운데 기억 켠 쪽이 적었던 것 | 8쌍 | |
+
+기억은 겨냥한 순간의 행동을 분명히 바꾼다. 다만 그런 순간 가운데 비킬 차로까지 있는 것은 100판에 1.5번꼴이라, 전체 양보 시간의 차이는 3.5% 이고 통계적으로 확실하지 않다 (p ≈ 0.18).
+
 ### BC 와 PPO, 같은 300판 — `reports/occlusion_300.txt`
 
 | | 도착 | 차 충돌 | 신호 위반 | 횡단보도 위반 | 양보 위반 |
@@ -158,51 +243,20 @@ python eval_daehakro.py models/ppo_track.pt --episodes 30 --gui                 
 | BC | 291 (97%) | 9 | 34/203 (17%) | 14/184 (8%) | 8건 |
 | PPO | 297 (99%) | 3 | 20/211 (9%) | 9/161 (6%) | 4건 |
 
-### 사이렌 차 양보, 같은 150판 — `reports/siren_oracle_150.txt`, `reports/siren_expert_bc_ppo_150.txt`
-
-| 지표 | 다 아는 운전자 | 같은 정보의 운전자 | PPO |
-|---|---|---|---|
-| 비킬 차로가 생긴 뒤 5초 안에 비킨 비율 | 20/35 (57%) | 5/26 (19%) | 7/26 (27%) |
-| 비킬 차로가 있던 구간에서 막은 시간 (가운데값) | 2.5초 | 10.8초 | 7.5초 |
-| 괜히 차로를 옮긴 횟수 (100판당) | 4.7번 | 4.0번 | 1.3번 |
-| 막은 시간 전체 (가운데값) | 7.2초 | 8.0초 | 8.0초 |
-
-- 가림과 시야 제한으로 잃는 것: 비킬 수 있는 상황에서의 빠른 양보가 57% → 19%.
-- PPO 는 같은 정보의 운전자와 같은 수준으로 비키고, 괜한 차로변경이 적다.
-- 사이렌 차 앞을 막는 구간의 약 70% 는 비킬 차로가 없다. 그래서 전체 막은 시간은 셋이 비슷하다.
-
-### 기억(10초)의 효과, 같은 PPO 모델 — `reports/siren_memory_*.txt`
-
-seed 가 다른 다섯 번의 비교 (150 + 150 + 200 + 500 + 200 판씩, 켬과 끔).
-
-| | 기억 켬 | 기억 끔 |
-|---|---|---|
-| 도착 (1,200판) | 1,188 | 1,188 |
-| 5초 안에 비킨 비율 | 42/203 (21%) | 45/211 (21%) |
-| 막은 시간 전체 (100판당) | 858초 | 897초 |
-
-기억이 겨냥한 순간(보이던 사이렌 차가 가려진 뒤 10초)만 보면 (200판):
-
-| | 기억 켬 | 기억 끔 |
-|---|---|---|
-| 차로변경 명령을 낸 비율 | 8.8% | 0.5% |
-| 그중 비킬 차로가 있던 스텝에서 | 100% | 0% |
-| 그런 구간에서 스스로 비킨 것 | 4/20 | 2/26 |
-
-기억은 겨냥한 순간의 행동을 바꾸지만, 그런 순간이 10판에 한 번꼴이라 전체 지표의 차이는 2~4% 다.
-
 ## 6. 폴더
 
 | 경로 | 내용 |
 |---|---|
 | `env/` | 도로·교통·관측·보상·가림 (`daehakro_env.py`, `occlusion.py`, `daehakro_config.py`, `daehakro_builder.py`, `sumo/`) |
 | `algorithms/`, `utils/`, `train.py`, `test.py` | 수업 코드 (PPO·BC 신경망, 모델 불러오기) |
+| `collect_demo.py`, `merge_demo.py`, `train_bc.py`, `run_all_BC.py`, `train_bc_ppo.py`, `train_ppo_curriculum.py`, `run_train.sh` | 학습 |
+| `eval_daehakro.py`, `final_eval.py` | 평가 |
+| `occ_report.py`, `siren_diag.py`, `run_occ_night.sh`, `run_occ_extra.sh`, `run_mem_pairs.sh` | 가림·사이렌 양보 분석 |
 | `collect_fast.py` | 제출용 데이터 수집 |
 | `collect_pomdp_data_daehakro.py` | 수업 형식 수집기 (JSONL). `collect_fast.py` 가 환경 설정과 모델 불러오기를 여기서 가져다 쓴다 |
-| `collect_demo.py`, `merge_demo.py`, `train_bc.py`, `run_all_BC.py`, `train_bc_ppo.py`, `train_ppo_curriculum.py`, `run_train.sh` | 학습 |
-| `eval_daehakro.py`, `final_eval.py`, `occ_report.py`, `siren_diag.py` | 평가 |
-| `models/` | 최종 모델 |
+| `models/` | 최종 모델 가중치 (`ppo_track.pt`, `bc_track.pt`) |
 | `reports/` | 평가 결과 원문 |
 | `check_setup.py`, `PROTECTED.sha256` | 환경 파일이 배포한 그대로인지 확인 |
+| `AGENTS.md`, `CLAUDE.md` | 팀 작업 규칙 (고치지 않는 파일 목록) |
 
-`data/`(시범), `results/`(학습 결과), `data_final/`(수집 데이터)는 저장소에 올리지 않는다.
+학습 중간 체크포인트, 로그, 캐시, 시범 데이터(`data/`), 학습 결과(`results/`), 수집 데이터(`data_final/`)는 넣지 않았다.
